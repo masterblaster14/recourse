@@ -223,6 +223,98 @@ separate from `claim_count`, which is proven on chain. The score shows both.
 
 ---
 
+## What is provable, what is observed, and what is neither
+
+The most common way to overclaim in this space is to present every check as if
+it carries the same weight. These do not, and the difference decides what can
+touch collateral.
+
+| Condition | Provable from signed bytes | Observed only | Needs an external reference |
+|---|:--:|:--:|:--:|
+| required fields present | ✅ | | |
+| `response_hash` matches the delivered payload | ✅ | | |
+| signature valid against the on-chain pubkey | ✅ | | |
+| signed timestamp older than the published bound | ✅ | | |
+| HTTP 200 / provider answered at all | | ✅ | |
+| latency | | ✅ | |
+| price agrees with the rest of the market | | ✅ | |
+| the signed timestamp is *truthful* | | | ⚠️ |
+| the data is *correct* | | | ⚠️ |
+
+**Only the first block can be slashed.** Those four are checked inside the
+contract, by the contract, from bytes the provider signed. Everything in the
+second block feeds the reliability score and the routing decision, and never
+touches the bond — a provider that fails them loses traffic, not collateral.
+Nothing in the third block is claimed at all.
+
+Latency deserves its place in the middle column specifically: an x402 server
+settles payment on chain before returning the resource, so several seconds of
+Algorand finality sit inside every measurement and no client can separate them
+from the provider's own work. It is not attributable, so it is not slashable.
+
+## The forger, and the honest limit of cryptographic proof
+
+Staleness is measured against a timestamp the provider itself signs. So the
+obvious attack is simply to lie about it: serve 45-minute-old data stamped
+`now()`. That response passes **all six checks** — valid signature, matching
+hash, timestamp inside the bound — and **cannot be slashed**. No cryptographic
+test catches it, because in isolation a lie about time is indistinguishable
+from the truth.
+
+`/feed/forger` is exactly that provider, bonded and live alongside the others,
+so the gap is demonstrated rather than described.
+
+What catches it is that a lie about time is *not* indistinguishable across a
+market. Every provider publishes `(claimed_timestamp, price)` pairs. A provider
+honest about being stale — old price, old timestamp — sits on the same price
+path as a fresh one; both are telling the truth about a different moment. The
+forger claims *now* while carrying a value from 45 minutes ago, so it disagrees
+with everyone else about a moment it named itself.
+
+Two things about that check are deliberate:
+
+- **No oracle.** The reference is the median of what providers collectively
+  claim, one vote each. We never designate a source as truthful, and we never
+  assert what the price "really" was. A minority forger stands out; that is all.
+- **It requires three.** With two providers the median is their midpoint and
+  each looks half-wrong — a tie, where picking a side is guessing. Three is the
+  smallest set in which a majority can exist, which is why the demo runs two
+  honest feeds and not one.
+
+And the conclusion is a score, never a slash. Slashing on a statistic would be
+precisely the centralised adjudication this project exists to remove.
+
+## The one gap that is still open, and its exact v2
+
+A provider that returns nothing, or returns something unsigned, cannot be
+slashed. There is no artifact to check, so no proof exists. This is the last
+real hole and it is not closable by cryptography — only by a game.
+
+**The design.** An agent opens a dispute naming the provider and the
+`request_id` it paid for. The provider has a fixed window to post a valid
+signed response for that id. Silence slashes; a valid signature does not.
+
+**Why this one needs a claimant deposit when the staleness path does not.** A
+staleness claim is self-proving — the contract can check it from bytes the
+provider signed, so filing a false one is impossible and a deposit would defend
+nothing. Non-delivery is the opposite: the *absence* of evidence is the
+allegation, and nothing stops an agent alleging it about a provider that
+answered perfectly well. So the disputant stakes a deposit, forfeited to the
+provider if a valid signed response appears.
+
+That asymmetry is the whole point. Deposits are friction, and friction belongs
+only where a claim cannot prove itself.
+
+**Why it is not built here.** It needs a dispute lifecycle in the contract, a
+second actor in the demo, and a window long enough to be meaningful but short
+enough to watch. A half-built challenge window is worse than a specified one,
+and this is a hackathon build with a stated scope.
+
+**What would make it stronger still.** If the x402 signed offers and receipts
+extension is available on AVM, the provider's signed offer at 402 time plus the
+absence of a receipt turns "it never answered" into a much more legible claim.
+Worth adopting before building the dispute lifecycle, not after.
+
 ## Why bonds and not escrow
 
 The intuitive fix for "I paid and got junk" is escrow: hold the buyer's money

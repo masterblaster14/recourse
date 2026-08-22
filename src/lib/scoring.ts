@@ -24,6 +24,8 @@ export type ScoreBreakdown = {
   staleness: number;
   latency: number;
   claimPenalty: number;
+  /** 1.0 = agrees with the market; lower = disagrees about its own timestamps. */
+  consistencyPenalty: number;
 };
 
 export type Score = {
@@ -112,7 +114,15 @@ export function computeScore(agg: SampleAggregate): Score {
   const claimPenalty =
     agg.samples === 0 ? 1 : Math.max(0, 1 - agg.upheldClaims / agg.samples);
 
-  const reliability = agg.samples === 0 ? 0 : base * claimPenalty;
+  // A provider that disagrees with the rest of the market about what the price
+  // was at a moment it itself named is serving something other than what it
+  // claims. That is evidence, not proof — so it caps the score and removes the
+  // provider from routing, and never touches the bond.
+  const c = agg.consistency;
+  const consistencyRate = c && c.checked > 0 ? c.consistent / c.checked : 1;
+  const consistencyPenalty = c?.conclusive ? consistencyRate : 1;
+
+  const reliability = agg.samples === 0 ? 0 : base * claimPenalty * consistencyPenalty;
 
   // Same basis as the weighted rates above: weighted successes over the Kish
   // effective sample size. Feeding raw counts here while the composite used
@@ -120,8 +130,9 @@ export function computeScore(agg: SampleAggregate): Score {
   // labels that implied one.
   const n = agg.effectiveSamples;
   const { lower, upper } = wilsonInterval(agg.weightedPassRate * n, n);
+
   // Proven violations pull the bound down too — they are facts, not estimates.
-  const lowerBound = agg.samples === 0 ? 0 : lower * claimPenalty;
+  const lowerBound = agg.samples === 0 ? 0 : lower * claimPenalty * consistencyPenalty;
   const confidence = confidenceFor(agg.effectiveSamples, upper - lower);
 
   return {
@@ -131,13 +142,16 @@ export function computeScore(agg: SampleAggregate): Score {
     confidence,
     recommendation: recommendationFor(lowerBound, confidence, {
       samples: agg.samples,
-      upheldClaims: agg.upheldClaims,
+      // A conclusive consistency failure is as decisive as an upheld claim: it
+      // must not be waved through as "not enough evidence yet".
+      upheldClaims: agg.upheldClaims + (c?.conclusive && consistencyRate < 0.5 ? 1 : 0),
     }),
     breakdown: {
       schema: round4(agg.schemaPassRate),
       staleness: round4(agg.stalenessPassRate),
       latency: round4(agg.latencyPassRate),
       claimPenalty: round4(claimPenalty),
+      consistencyPenalty: round4(consistencyPenalty),
     },
   };
 }
@@ -185,6 +199,11 @@ export type ScoreRecord = {
     staleness_pass_rate: number;
     latency_pass_rate: number;
     signature_pass_rate: number;
+    /** Median relative disagreement with other providers about the price at a
+     *  moment this provider itself named. Null until peers exist. */
+    price_divergence: number | null;
+    divergence_conclusive: boolean;
+    divergence_checked: number;
   };
   onchain: {
     app_id: number;
@@ -244,6 +263,9 @@ export function buildScoreRecord(args: {
       staleness_pass_rate: round4(agg.stalenessPassRate),
       latency_pass_rate: round4(agg.latencyPassRate),
       signature_pass_rate: round4(agg.sigPassRate),
+      price_divergence: agg.consistency?.medianDivergence ?? null,
+      divergence_conclusive: agg.consistency?.conclusive ?? false,
+      divergence_checked: agg.consistency?.checked ?? 0,
     },
     onchain: {
       app_id: appId,

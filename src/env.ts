@@ -55,6 +55,12 @@ export const env = {
   providerBAddress: opt("PROVIDER_B_ADDRESS"),
   providerBMnemonic: opt("PROVIDER_B_MNEMONIC"),
   providerBSigningSk: opt("PROVIDER_B_SIGNING_SK"),
+  providerCAddress: opt("PROVIDER_C_ADDRESS"),
+  providerCMnemonic: opt("PROVIDER_C_MNEMONIC"),
+  providerCSigningSk: opt("PROVIDER_C_SIGNING_SK"),
+  providerDAddress: opt("PROVIDER_D_ADDRESS"),
+  providerDMnemonic: opt("PROVIDER_D_MNEMONIC"),
+  providerDSigningSk: opt("PROVIDER_D_SIGNING_SK"),
 
   agentAddress: opt("AGENT_ADDRESS"),
   agentMnemonic: opt("AGENT_MNEMONIC"),

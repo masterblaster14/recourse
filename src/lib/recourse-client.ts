@@ -77,7 +77,19 @@ const REQUIRED_FIELDS = ["symbol", "price", "data_timestamp"] as const;
  * brand new provider gets real traffic because the bond, not a reputation it
  * cannot have yet, is what protects the buyer.
  */
-export const EXPLORE_SAMPLES = 10;
+export const EXPLORE_SAMPLES = 6;
+
+/**
+ * How much latitude an unmeasured provider actually gets.
+ *
+ * Flat exploration is a free lunch for an attacker: register, harvest the
+ * allowance serving junk, abandon, register again. Scaling the allowance to
+ * what the bond can actually cover makes the cold start something the provider
+ * has paid for — a thin bond buys proportionally less rope.
+ */
+export function exploreAllowance(coverageCalls: number): number {
+  return Math.max(1, Math.min(EXPLORE_SAMPLES, coverageCalls));
+}
 
 /**
  * The assets this agent will spend, with a hard per-payment ceiling.
@@ -371,7 +383,8 @@ export type Selection = {
 export function selectProvider(scores: ScoreRecord[]): Selection {
   const candidates: RouteCandidate[] = scores.map(s => {
     const bonded = s.active && s.coverage_calls >= 1;
-    const exploring = s.observed.samples < EXPLORE_SAMPLES;
+    const allowance = exploreAllowance(s.coverage_calls);
+    const exploring = s.observed.samples < allowance;
     let eligible: boolean;
     let reason: string;
 
@@ -380,7 +393,7 @@ export function selectProvider(scores: ScoreRecord[]): Selection {
       reason = s.active ? "bond cannot cover a single claim" : "bond exhausted, deactivated on chain";
     } else if (exploring) {
       eligible = true;
-      reason = `unmeasured (${s.observed.samples}/${EXPLORE_SAMPLES}), covered by ${s.coverage_calls} claims of bond`;
+      reason = `unmeasured (${s.observed.samples}/${allowance}), covered by ${s.coverage_calls} claims of bond`;
     } else if (s.recommendation === "unrated") {
       // No evidence against it, and the bond is what covers the risk meanwhile.
       eligible = true;
@@ -419,14 +432,16 @@ export function selectProvider(scores: ScoreRecord[]): Selection {
 
   // Explore the least-measured provider first, so evidence accumulates evenly
   // instead of the first provider tried monopolising the traffic.
-  const unmeasured = eligible.filter(s => s.observed.samples < EXPLORE_SAMPLES);
+  const unmeasured = eligible.filter(
+    s => s.observed.samples < exploreAllowance(s.coverage_calls),
+  );
   if (unmeasured.length > 0) {
     const chosen = unmeasured.reduce((a, b) =>
       a.observed.samples <= b.observed.samples ? a : b,
     );
     return {
       chosen,
-      reason: `exploring — ${chosen.observed.samples}/${EXPLORE_SAMPLES} samples, bond covers ${chosen.coverage_calls} claims`,
+      reason: `exploring — ${chosen.observed.samples}/${exploreAllowance(chosen.coverage_calls)} samples, bond covers ${chosen.coverage_calls} claims`,
       candidates,
     };
   }

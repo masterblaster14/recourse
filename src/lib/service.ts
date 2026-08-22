@@ -6,6 +6,7 @@
 import { env } from "../env.ts";
 import { readProvider, readGlobalState, type ProviderState } from "./chain.ts";
 import { store } from "./db.ts";
+import { computeConsistency } from "./consistency.ts";
 import { buildScoreRecord, type ScoreRecord } from "./scoring.ts";
 import { providers, providerByAddress, slaFor, type DemoProvider } from "./providers.ts";
 
@@ -37,6 +38,11 @@ export async function scoreFor(
   const known: DemoProvider | undefined = providerByAddress(address);
   const row = await store().getProvider(address);
   const agg = await store().aggregate(address, SCORE_WINDOW_HOURS);
+
+  // Consistency is a statement about disagreement, so it needs every
+  // provider's observations, not just this one's.
+  const all = await store().allSamples(SCORE_WINDOW_HOURS);
+  agg.consistency = computeConsistency(all).get(address);
 
   const record = buildScoreRecord({
     label: known?.label ?? row?.label ?? "Unknown provider",
@@ -79,6 +85,9 @@ export type ProviderSummary = {
   samples: number;
   passes: number;
   claims: number;
+  /** Median disagreement with the rest of the market, as a fraction. */
+  divergence: number | null;
+  divergence_conclusive: boolean;
 };
 
 export async function providerDirectory(): Promise<ProviderSummary[]> {
@@ -103,6 +112,8 @@ export async function providerDirectory(): Promise<ProviderSummary[]> {
       samples: s?.observed.samples ?? 0,
       passes: s?.observed.passes ?? 0,
       claims: s?.onchain.claim_count ?? 0,
+      divergence: s?.observed.price_divergence ?? null,
+      divergence_conclusive: s?.observed.divergence_conclusive ?? false,
     });
   }
   return out;

@@ -14,7 +14,7 @@ export type ProviderRow = {
   label: string;
   endpoint: string;
   pubkey_b64: string;
-  variant: "compliant" | "stale";
+  variant: "compliant" | "stale" | "forger";
 };
 
 export type SampleRow = {
@@ -28,6 +28,10 @@ export type SampleRow = {
   sig_ok: boolean;
   staleness_ok: boolean;
   latency_ok: boolean;
+  /** The price the provider signed, and the moment it claimed it was from.
+   *  Cross-provider consistency is computed from exactly these two fields. */
+  price: number;
+  claimed_ts: number;
 };
 
 export type ClaimRow = {
@@ -76,6 +80,13 @@ export type SampleAggregate = {
   sigPassRate: number;
   p95LatencyMs: number;
   upheldClaims: number;
+  /** Cross-provider price agreement. Undefined until there are enough peers. */
+  consistency?: {
+    checked: number;
+    consistent: number;
+    medianDivergence: number;
+    conclusive: boolean;
+  };
 };
 
 export interface Store {
@@ -88,6 +99,9 @@ export interface Store {
   insertClaim(c: ClaimRow): Promise<boolean>;
   insertPayment(p: PaymentRow): Promise<void>;
   aggregate(provider: string, windowHours: number): Promise<SampleAggregate>;
+  /** Every provider's samples in the window. Consistency cannot be computed
+   *  per provider in isolation — it is a statement about disagreement. */
+  allSamples(windowHours: number): Promise<SampleRow[]>;
   recentSamples(provider: string, limit: number): Promise<SampleRow[]>;
   listClaims(limit: number): Promise<ClaimRow[]>;
   listPayments(limit: number): Promise<PaymentRow[]>;
@@ -115,8 +129,12 @@ CREATE TABLE IF NOT EXISTS samples (
   stale_s      INT,
   sig_ok       BOOLEAN,
   staleness_ok BOOLEAN,
-  latency_ok   BOOLEAN
+  latency_ok   BOOLEAN,
+  price        DOUBLE PRECISION,
+  claimed_ts   BIGINT
 );
+ALTER TABLE samples ADD COLUMN IF NOT EXISTS price      DOUBLE PRECISION;
+ALTER TABLE samples ADD COLUMN IF NOT EXISTS claimed_ts BIGINT;
 CREATE INDEX IF NOT EXISTS samples_provider_ts ON samples (provider, ts DESC);
 
 CREATE TABLE IF NOT EXISTS claims (
@@ -245,6 +263,10 @@ class MemoryStore implements Store {
     const upheld = this.claims.filter(c => c.provider === provider).length;
     return aggregateFromRows(rows, upheld);
   }
+  async allSamples(windowHours: number): Promise<SampleRow[]> {
+    const cutoff = Date.now() - windowHours * 3600_000;
+    return this.samples.filter(s => s.ts.getTime() >= cutoff);
+  }
   async recentSamples(provider: string, limit: number): Promise<SampleRow[]> {
     return this.samples
       .filter(s => s.provider === provider)
@@ -312,11 +334,12 @@ class PostgresStore implements Store {
   async insertSample(s: SampleRow): Promise<void> {
     await this.pool.query(
       `INSERT INTO samples
-         (provider, ts, http_status, latency_ms, schema_ok, stale_s, sig_ok, staleness_ok, latency_ok)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
+         (provider, ts, http_status, latency_ms, schema_ok, stale_s, sig_ok, staleness_ok, latency_ok, price, claimed_ts)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)`,
       [
         s.provider, s.ts, s.http_status, s.latency_ms,
         s.schema_ok, s.stale_s, s.sig_ok, s.staleness_ok, s.latency_ok,
+        s.price, s.claimed_ts,
       ],
     );
   }
@@ -352,6 +375,14 @@ class PostgresStore implements Store {
     );
     const rows = (r.rows as SampleRow[]).map(row => ({ ...row, ts: new Date(row.ts) }));
     return aggregateFromRows(rows, c.rows[0]?.n ?? 0);
+  }
+
+  async allSamples(windowHours: number): Promise<SampleRow[]> {
+    const r = await this.pool.query(
+      `SELECT * FROM samples WHERE ts >= now() - ($1 || ' hours')::interval`,
+      [String(windowHours)],
+    );
+    return (r.rows as SampleRow[]).map(row => ({ ...row, ts: new Date(row.ts) }));
   }
 
   async recentSamples(provider: string, limit: number): Promise<SampleRow[]> {

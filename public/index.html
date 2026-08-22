@@ -51,9 +51,9 @@
   <!-- --------------------------------------------------------- stat band -->
   <section class="statband" id="statband">
     <div class="stat"><div class="n" id="st-providers">—</div><div class="l">Providers bonded</div></div>
-    <div class="stat"><div class="n" id="st-bonded">—</div><div class="l">Total bonded</div></div>
-    <div class="stat accent"><div class="n" id="st-claims">—</div><div class="l">Claims upheld on chain</div></div>
-    <div class="stat"><div class="n" id="st-slashed">—</div><div class="l">Slashed from bonds</div></div>
+    <div class="stat"><div class="n" id="st-bonded">—</div><div class="l">Bonded right now</div></div>
+    <div class="stat accent"><div class="n" id="st-claims">—</div><div class="l">Claims upheld · cumulative</div></div>
+    <div class="stat"><div class="n" id="st-slashed">—</div><div class="l">Slashed · cumulative</div></div>
     <div class="stat"><div class="n" id="st-payments">—</div><div class="l">x402 payments settled</div></div>
   </section>
 
@@ -116,8 +116,9 @@
           <div class="note accent">
             <b>Machine to machine.</b> This dashboard is deliberately non-custodial — it holds no keys and
             signs nothing. The wallet belongs to the autonomous agent, which declares its own spend limit and
-            then decides where its money goes with <b>no human approving any individual payment</b>. The button
-            starts it; every decision after that is the agent's.
+            then decides where its money goes. A human starts a funded session; after that
+            <b>no human approves any individual payment</b> — every routing decision, purchase, verification
+            and claim is the agent's.
           </div>
         </div>
       </div>

@@ -16,6 +16,7 @@ import { env, fromMicro, txUrl } from "../env.ts";
 import {
   accountInfo,
   depositBond,
+  fundAccount,
   optInAsset,
   readProvider,
   registerProvider,
@@ -42,6 +43,21 @@ async function main(): Promise<void> {
   console.log(bar());
   console.log(`  RECOURSE SETUP — app ${env.appId}, asset ${env.assetId} (${env.assetSymbol})`);
   console.log(bar());
+
+  // ------------------------------------------------ 0. ALGO for new accounts
+  head("0. make sure every account can pay its own fees");
+  const MIN_ALGO = 400_000;
+  for (const p of providers()) {
+    let held = 0;
+    try {
+      held = (await accountInfo(p.address)).microAlgos;
+    } catch {
+      held = 0; // never funded, so it does not exist on chain yet
+    }
+    if (held >= MIN_ALGO) { info(`${p.label} has ALGO`, `${(held / 1e6).toFixed(3)}`); continue; }
+    const tx = await fundAccount(deployer, p.address, MIN_ALGO - held, "recourse:provider-algo");
+    ok(`${p.label} funded with ALGO`, txUrl(tx));
+  }
 
   // ------------------------------------------------------------ 1. opt-ins
   head(`1. opt accounts into ${env.assetSymbol}`);

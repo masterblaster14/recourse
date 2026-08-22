@@ -246,6 +246,8 @@ export async function runDemo(opts: DemoOptions = {}): Promise<DemoSummary> {
           sig_ok: outcome.sigOk,
           staleness_ok: outcome.stalenessOk,
           latency_ok: outcome.latencyOk,
+          price: result.body?.price ?? 0,
+          claimed_ts: result.body?.data_timestamp ?? 0,
         });
       } else {
         // The payment layer failed, so the provider never had a turn. Counting

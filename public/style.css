@@ -423,3 +423,5 @@ footer a { color: var(--lime); }
 }
 .note b { color: var(--ink); }
 .note.accent { background: var(--lime-soft); }
+
+.faint { color: var(--text-faint); font-weight: 400; font-size: 0.9em; }

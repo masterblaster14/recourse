@@ -13,6 +13,7 @@
 import { randomBytes } from "node:crypto";
 import algosdk from "algosdk";
 import { env } from "../env.ts";
+import { priceAt } from "./price-series.ts";
 import {
   canonicalJson,
   claimMessage,
@@ -22,10 +23,25 @@ import {
   slaHash,
 } from "./signing.ts";
 
-export type Variant = "compliant" | "stale";
+/**
+ * Three behaviours, chosen to span exactly what this system can and cannot
+ * prove:
+ *
+ *   compliant  fresh data, honest timestamp        -> passes everything
+ *   stale      old data, honest timestamp          -> PROVABLE breach, slashable
+ *   forger     old data, timestamp forged to now   -> passes all six checks
+ *
+ * The forger is the honest answer to the sharpest criticism of this design:
+ * staleness is measured against a timestamp the provider itself controls, so a
+ * provider that simply lies about the time defeats every cryptographic check.
+ * It cannot be slashed and we do not pretend otherwise. It is caught instead by
+ * cross-provider price consistency, which is an observation rather than a proof
+ * — and is scored, never slashed.
+ */
+export type Variant = "compliant" | "stale" | "forger";
 
 export type DemoProvider = {
-  key: "A" | "B";
+  key: "A" | "B" | "C" | "D";
   variant: Variant;
   label: string;
   blurb: string;
@@ -62,19 +78,38 @@ export type Sla = {
 
 export const REQUIRED_FIELDS = ["symbol", "price", "data_timestamp"] as const;
 
-function build(key: "A" | "B", variant: Variant): DemoProvider {
-  const address = key === "A" ? env.providerAAddress : env.providerBAddress;
-  const mnemonic = key === "A" ? env.providerAMnemonic : env.providerBMnemonic;
-  const signingSk = key === "A" ? env.providerASigningSk : env.providerBSigningSk;
-  const path = `/feed/${variant}`;
+const LABELS = {
+  A: "Acme Price Feed",
+  B: "Northwind Oracle",
+  C: "Cerberus Data",
+  D: "Meridian Feed",
+} as const;
+
+const BLURBS: Record<Variant, string> = {
+  compliant: "Fresh data, honest timestamp. Honours its published SLA.",
+  stale:
+    "Serves 45-minute-old data and admits it in the signed timestamp. A provable breach of its own SLA on every call — slashable.",
+  forger:
+    "Serves the same 45-minute-old data but stamps it as current. Passes all six checks and CANNOT be slashed. Caught only by cross-provider price consistency.",
+};
+
+const KEYED = {
+  A: { address: () => env.providerAAddress, mnemonic: () => env.providerAMnemonic, sk: () => env.providerASigningSk },
+  B: { address: () => env.providerBAddress, mnemonic: () => env.providerBMnemonic, sk: () => env.providerBSigningSk },
+  C: { address: () => env.providerCAddress, mnemonic: () => env.providerCMnemonic, sk: () => env.providerCSigningSk },
+  D: { address: () => env.providerDAddress, mnemonic: () => env.providerDMnemonic, sk: () => env.providerDSigningSk },
+} as const;
+
+function build(key: "A" | "B" | "C" | "D", variant: Variant, slug: string): DemoProvider {
+  const address = KEYED[key].address();
+  const mnemonic = KEYED[key].mnemonic();
+  const signingSk = KEYED[key].sk();
+  const path = `/feed/${slug}`;
   return {
     key,
     variant,
-    label: key === "A" ? "Acme Price Feed" : "Northwind Oracle",
-    blurb:
-      variant === "compliant"
-        ? "Signs a current timestamp. Honours its published SLA."
-        : "Signs data 45 minutes old while promising 60 seconds. Violates its own SLA on every call.",
+    label: LABELS[key],
+    blurb: BLURBS[variant],
     address,
     mnemonic,
     signingSk,
@@ -87,11 +122,24 @@ function build(key: "A" | "B", variant: Variant): DemoProvider {
 let _providers: DemoProvider[] | null = null;
 
 export function providers(): DemoProvider[] {
-  if (!_providers) _providers = [build("A", "compliant"), build("B", "stale")];
+  if (!_providers) {
+    _providers = [
+      build("A", "compliant", "compliant"),
+      build("D", "compliant", "compliant-2"),
+      build("B", "stale", "stale"),
+      build("C", "forger", "forger"),
+    ];
+  }
   return _providers;
 }
 
-export function providerByVariant(variant: string): DemoProvider | undefined {
+/** Routes /feed/:slug. Two providers share the `compliant` behaviour, so the
+ *  path slug rather than the variant is what identifies one. */
+export function providerBySlug(slug: string): DemoProvider | undefined {
+  return providers().find(p => p.path === `/feed/${slug}`);
+}
+
+export function providerByVariant(variant: Variant): DemoProvider | undefined {
   return providers().find(p => p.variant === variant);
 }
 
@@ -131,20 +179,6 @@ export function slaHashFor(p: DemoProvider): Buffer {
 
 // ------------------------------------------------------------- the feed data
 
-/**
- * A simulated ALGO/USD mid price on a slow random walk. It is simulated on
- * purpose and the README says so: the point of these endpoints is to be
- * measured against an SLA, not to be an oracle.
- */
-const BASE_PRICE = 0.1842;
-let drift = 0;
-
-function currentPrice(): number {
-  drift += (Math.random() - 0.5) * 0.0006;
-  drift = Math.max(-0.012, Math.min(0.012, drift));
-  return Math.round((BASE_PRICE + drift) * 10_000) / 10_000;
-}
-
 export type FeedData = {
   symbol: string;
   price: number;
@@ -166,11 +200,15 @@ export type SignedFeedResponse = FeedData & {
  */
 export function serveFeed(p: DemoProvider): SignedFeedResponse {
   const nowS = Math.floor(Date.now() / 1000);
+
+  // How old the data actually is, and what the provider is willing to admit.
+  // The forger is defined entirely by the gap between these two lines.
+  const actualLagS = p.variant === "compliant" ? 0 : env.staleOffsetS;
   const dataTimestamp = p.variant === "stale" ? nowS - env.staleOffsetS : nowS;
 
   const data: FeedData = {
     symbol: "ALGO/USD",
-    price: currentPrice(),
+    price: priceAt(actualLagS, nowS),
     data_timestamp: dataTimestamp,
   };
 

@@ -119,6 +119,14 @@ function renderProviders(list) {
           <b>${p.samples ? `≥${low}%` : "—"}</b>
         </div>
 
+        ${p.divergence !== null && p.divergence !== undefined ? `
+        <div class="metric-row" style="font-size:11px;margin-top:6px">
+          <span>${p.divergence_conclusive && p.divergence > 0.004
+            ? "<b>disagrees with the market</b> — cannot be slashed"
+            : "agrees with the market"}</span>
+          <b>${(p.divergence * 100).toFixed(2)}%</b>
+        </div>` : ""}
+
         <div class="pstats">
           <div class="pstat"><div class="n">${p.samples}</div><div class="l">samples</div></div>
           <div class="pstat"><div class="n" style="color:${p.claims ? "var(--bad)" : "inherit"}">${p.claims}</div><div class="l">claims</div></div>
@@ -137,8 +145,9 @@ async function loadRegistry() {
       <div class="k">App ID</div><div class="v"><a href="${r.app_url}" target="_blank" rel="noopener">${r.app_id}</a></div>
       <div class="k">Providers</div><div class="v">${r.provider_count}</div>
       <div class="k">Total bonded</div><div class="v">${fmt(r.total_bonded)} ${state.asset}</div>
-      <div class="k">Claims upheld</div><div class="v">${r.claim_count}</div>
-      <div class="k">Total slashed</div><div class="v">${fmt(r.total_slashed)} ${state.asset}</div>
+      <div class="k">Claims upheld <span class="faint">(cumulative)</span></div><div class="v">${r.claim_count}</div>
+      <div class="k">Total slashed <span class="faint">(cumulative)</span></div><div class="v">${fmt(r.total_slashed)} ${state.asset}</div>
+      <div class="k">Bonded <span class="faint">(live)</span></div><div class="v">${fmt(r.total_bonded)} ${state.asset}</div>
       <div class="k">x402 payments seen</div><div class="v">${r.x402_payments_observed}</div>
       <div class="k">x402 volume</div><div class="v">${fmt(r.x402_volume)} ${state.asset}</div>`;
 

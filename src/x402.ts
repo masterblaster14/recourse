@@ -84,9 +84,7 @@ const feedDiscovery = declareDiscoveryExtension({
 });
 
 export function buildRoutes(): RoutesConfig {
-  const [a, b] = providers();
-
-  const routes: RoutesConfig = {
+  const routes: Record<string, unknown> = {
     "GET /score": {
       resource: resourceUrl("/score"),
       accepts: [
@@ -105,42 +103,31 @@ export function buildRoutes(): RoutesConfig {
       tags: ["x402", "risk", "reputation", "algorand", "sla"],
       extensions: scoreDiscovery,
     },
-    "GET /feed/compliant": {
-      resource: resourceUrl("/feed/compliant"),
-      accepts: [
-        {
-          scheme: "exact",
-          price: priceFor(env.priceMicro),
-          network: env.networkCaip2,
-          payTo: a.address,
-        },
-      ],
-      description: "ALGO/USD price feed, signed, SLA compliant. Demo provider A.",
-      mimeType: "application/json",
-      serviceName: "Acme Price Feed",
-      tags: ["x402", "price-feed", "algorand", "bonded"],
-      extensions: feedDiscovery,
-    },
-    "GET /feed/stale": {
-      resource: resourceUrl("/feed/stale"),
-      accepts: [
-        {
-          scheme: "exact",
-          price: priceFor(env.priceMicro),
-          network: env.networkCaip2,
-          payTo: b.address,
-        },
-      ],
-      description:
-        "ALGO/USD price feed, signed, deliberately violating its own staleness SLA. Demo provider B.",
-      mimeType: "application/json",
-      serviceName: "Northwind Oracle",
-      tags: ["x402", "price-feed", "algorand", "bonded"],
-      extensions: feedDiscovery,
-    },
   };
 
-  return routes;
+  // One paid route per demo provider, each paying its own address. That the
+  // payTo differs per route is what makes a refund out of a specific
+  // provider's bond mean anything.
+  for (const p of providers()) {
+    routes[`GET ${p.path}`] = {
+      resource: resourceUrl(p.path),
+      accepts: [
+        {
+          scheme: "exact",
+          price: priceFor(env.priceMicro),
+          network: env.networkCaip2,
+          payTo: p.address,
+        },
+      ],
+      description: `ALGO/USD price feed. ${p.blurb}`,
+      mimeType: "application/json",
+      serviceName: p.label,
+      tags: ["x402", "price-feed", "algorand", "bonded"],
+      extensions: feedDiscovery,
+    };
+  }
+
+  return routes as RoutesConfig;
 }
 
 export function buildPaymentMiddleware() {

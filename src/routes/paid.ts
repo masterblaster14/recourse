@@ -7,7 +7,7 @@
  */
 import { Hono } from "hono";
 import { env, fromMicro } from "../env.ts";
-import { providerByVariant, serveFeed } from "../lib/providers.ts";
+import { providerBySlug, serveFeed } from "../lib/providers.ts";
 import { scoreFor } from "../lib/service.ts";
 
 export const paidRoutes = new Hono();
@@ -59,9 +59,12 @@ paidRoutes.get("/score", async c => {
  */
 paidRoutes.get("/feed/:variant", c => {
   const variant = c.req.param("variant");
-  const provider = providerByVariant(variant);
+  const provider = providerBySlug(variant);
   if (!provider) {
-    return c.json({ error: `unknown feed variant '${variant}'`, available: ["compliant", "stale"] }, 404);
+    return c.json(
+      { error: `unknown feed '${variant}'`, available: ["compliant", "compliant-2", "stale", "forger"] },
+      404,
+    );
   }
   if (!provider.signingSk) {
     return c.json({ error: `provider ${variant} has no signing key configured` }, 503);
