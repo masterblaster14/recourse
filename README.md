@@ -8,6 +8,10 @@ files a claim and compensation is paid out of that provider's bond automatically
 > x402 gives agents the ability to pay. Recourse gives them a reason to trust
 > what they are paying for.
 
+**Live:** <https://recourse-api-production.up.railway.app> · all three paid
+endpoints are listed in the public
+[GoPlausible Bazaar catalog](https://facilitator.goplausible.xyz/dashboard/leaderboards?cat=resources).
+
 <!-- PROOF:START -->
 ## Live proof
 
@@ -293,6 +297,13 @@ npm run contract:deploy   # deploys, funds and opts the app into the asset
 npm run setup             # opt-ins, distribution, registration, bonds
 npm run preflight         # tells you exactly what is still missing
 npm start                 # http://localhost:3000
+```
+
+Run the tests:
+
+```bash
+npm test              # 57 unit tests, no network
+npm run test:chain    # adversarial checks against the deployed contract
 ```
 
 Rebuild the contract only if you edit it:
