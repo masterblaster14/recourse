@@ -68,6 +68,15 @@ export const env = {
   port: num("PORT", 3000),
   publicUrl: opt("PUBLIC_URL", `http://localhost:${num("PORT", 3000)}`).replace(/\/$/, ""),
   adminKey: opt("ADMIN_KEY", "dev"),
+  /**
+   * Where this is deployed, for documentation only.
+   *
+   * Deliberately separate from PUBLIC_URL: that one is what the agent actually
+   * buys from, and it has to stay localhost during local runs or a rehearsal
+   * would spend real money against production.
+   */
+  deployUrl: opt("DEPLOY_URL", ""),
+  repoUrl: opt("REPO_URL", ""),
   databaseUrl: opt("DATABASE_URL"),
 };
 

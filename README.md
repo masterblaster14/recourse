@@ -17,15 +17,20 @@ endpoints are listed in the public
 
 | Item | Link |
 |---|---|
-| Live API + dashboard | _pending deploy_ |
+| **Live API + dashboard** | [https://recourse-api-production.up.railway.app](https://recourse-api-production.up.railway.app) |
+| Source | [github.com/masterblaster14/recourse](https://github.com/masterblaster14/recourse) |
 | Recourse App ID (TestNet) | [`769688356`](https://lora.algokit.io/testnet/application/769688356) |
 | App created | [`MNBW33DM…`](https://lora.algokit.io/testnet/transaction/MNBW33DMHWIRIQMSXWGSU362CPUZUJPQCRMDQRR4HSQRT2MVHHFQ) |
 | App funded (box MBR + payouts) | [`5PYKDRPQ…`](https://lora.algokit.io/testnet/transaction/5PYKDRPQ7E2HWSBRDKABTJGYSVZLKI23EO65ZBJ72XNIHFKQ5DHQ) |
 | App opted into USDC | [`I3B7IO74…`](https://lora.algokit.io/testnet/transaction/I3B7IO74MCTDAYV4KN44XHNCWLFBGLCTIQ4HFGXYUN4I3RLMKYKQ) |
 | Acme Price Feed registered (SLA committed) | [`FJXMMJOI…`](https://lora.algokit.io/testnet/transaction/FJXMMJOI6UU67KSIK2F3GSMEXOUHGJPOYMFET3YFXE3DNPOHD3YQ) |
+| Meridian Feed registered (SLA committed) | [`72ITJCR5…`](https://lora.algokit.io/testnet/transaction/72ITJCR54E3QOAPEPZYK6LDBQWUJXZTNLC26WFRD3FZUPVOZUNJQ) |
 | Northwind Oracle registered (SLA committed) | [`APD3KOGP…`](https://lora.algokit.io/testnet/transaction/APD3KOGPB4HBTLDWL3NEGJEZHTPJCYO2BIJ2ERTPO5DNVIJBKAKQ) |
+| Cerberus Data registered (SLA committed) | [`U6KJQTNB…`](https://lora.algokit.io/testnet/transaction/U6KJQTNBZBCUGV5OSOGMF3LPNBO2MWRRKOURBTKYDLGU4C5SPKAA) |
 | Acme Price Feed bond staked | [`DPRBA3CU…`](https://lora.algokit.io/testnet/transaction/DPRBA3CUEVS6UQWRNRHEXZDJD7YJY73ERPDX37JBQCTTCOSUWRMQ) |
-| Northwind Oracle bond staked | [`QE7BUFCU…`](https://lora.algokit.io/testnet/transaction/QE7BUFCUONQHHURDY4I3G6DUFAUHWND3A2LBFGAMNUHSWQ56HEUQ) |
+| Meridian Feed bond staked | [`DAJPQAJS…`](https://lora.algokit.io/testnet/transaction/DAJPQAJSWPJRBXNPQLU56MKGVFSYY6PC5776FKOWYUK4DKONU3FA) |
+| Northwind Oracle bond staked | [`SMIPEXW7…`](https://lora.algokit.io/testnet/transaction/SMIPEXW7K3PYRR2HJXIXTNGX6BIIG5ILB72PH5Q4ZBNVRJKILEYA) |
+| Cerberus Data bond staked | [`SOYLZPD3…`](https://lora.algokit.io/testnet/transaction/SOYLZPD3TWPOARWB2UXEERVOEXH4DJN5GJCN32LXXVZV5DNWPIBA) |
 | **x402 payment settled** | [`T5WH7WNY…`](https://lora.algokit.io/testnet/transaction/T5WH7WNYREV33ZSYHNKLJ5QB5SJ37SWCDSGUJAP374KJ4ZL4OQQQ) |
 | **Upheld claim (refund + slash)** | [`ULZQOKWD…`](https://lora.algokit.io/testnet/transaction/ULZQOKWD3NCD6JGJ5DEUDSLM3TOBH3NJ4SOBSOA6MC3BVPHYXYKQ) |
 | Verified successes attested | [`YKYIVI5R…`](https://lora.algokit.io/testnet/transaction/YKYIVI5RYQGQVBU4RI4BQPXHBTDFNV4XBF3KKXEHBII3VGUTD7SQ) |

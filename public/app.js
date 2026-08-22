@@ -65,9 +65,12 @@ async function loadHealth() {
       <div class="k">Facilitator</div><div class="v">GoPlausible</div>
       <div class="k">Store</div><div class="v">${h.store}</div>`;
 
-    $("foot-links").innerHTML = h.app_id
-      ? `<a href="${EXPLORER}/application/${h.app_id}" target="_blank" rel="noopener">app ${h.app_id} on Lora</a>`
-      : "";
+    const links = [];
+    if (h.app_id) links.push(`<a href="${EXPLORER}/application/${h.app_id}" target="_blank" rel="noopener">app ${h.app_id} on Lora</a>`);
+    if (h.repo) links.push(`<a href="${h.repo}" target="_blank" rel="noopener">source</a>`);
+    links.push(`<a href="/proof" target="_blank" rel="noopener">proof</a>`);
+    links.push(`<a href="/ecosystem" target="_blank" rel="noopener">ecosystem</a>`);
+    $("foot-links").innerHTML = links.join(" · ");
   } catch { $("dot-chain").className = "dot off"; }
 }
 

@@ -26,11 +26,13 @@ function main(): void {
   const p = readProof();
   const rows: string[] = [];
 
-  const liveUrl = env.publicUrl.includes("localhost")
-    ? "_pending deploy_"
-    : `[${env.publicUrl}](${env.publicUrl})`;
-
-  rows.push(`| Live API + dashboard | ${liveUrl} |`);
+  const deployed = env.deployUrl || (env.publicUrl.includes("localhost") ? "" : env.publicUrl);
+  rows.push(
+    deployed
+      ? `| **Live API + dashboard** | [${deployed}](${deployed}) |`
+      : "| **Live API + dashboard** | _pending deploy_ |",
+  );
+  if (env.repoUrl) rows.push(`| Source | [${env.repoUrl.replace(/^https:\/\//, "")}](${env.repoUrl}) |`);
   rows.push(
     p.app_id
       ? `| Recourse App ID (TestNet) | [\`${p.app_id}\`](${appUrl(p.app_id)}) |`

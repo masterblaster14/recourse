@@ -36,6 +36,7 @@ publicRoutes.get("/health", async c => {
     store: store().kind,
     /** The autonomous buyer. No human approves its payments. */
     agent: env.agentAddress || null,
+    repo: env.repoUrl || null,
     demo_running: isRunning(),
     paid_endpoints: ["GET /score", "GET /feed/compliant", "GET /feed/stale"],
     price: {
