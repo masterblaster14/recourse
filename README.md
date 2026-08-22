@@ -159,7 +159,7 @@ than a `"$0.001"` string, so there is no ambiguity about which token was charged
 | `GET /feed/compliant` | 0.001 USDC | provider A | Signed ALGO/USD feed. Honours its SLA. |
 | `GET /feed/stale` | 0.001 USDC | provider B | Signed ALGO/USD feed. Signs a timestamp 45 min old against a 60 s bound — a provable breach on every call. |
 
-Free: `/providers` `/sla` `/registry` `/claims` `/payments` `/proof` `/health` `/events` `/x402`
+Free: `/providers` `/sla` `/registry` `/ecosystem` `/preflight` `/claims` `/payments` `/proof` `/health` `/events` `/x402`
 
 ---
 
@@ -222,6 +222,44 @@ separate from `claim_count`, which is proven on chain. The score shows both.
 - **`record_success` is operator-attested**, as described above.
 
 ---
+
+## The market this is for
+
+`GET /ecosystem` reads the public GoPlausible Bazaar — every x402 endpoint an
+agent could pay right now — and cross-references each recipient against the
+Recourse registry on chain. At the time of writing:
+
+```
+300 endpoints indexed        2 backed by collateral        298 with no recourse
+
+busiest, with nothing standing behind them:
+  x402.twit.sh/tweets/search        75,389 settlements   $0.006
+  onestepchess.xyz/api/v1/moves     25,755 settlements   $0.01
+  api.syraa.fun/insights/*           8,071 settlements   $0.02
+```
+
+Seventy-five thousand payments to a single endpoint. If any one of those
+responses was stale or malformed, the money was gone and there was nothing to
+claim against. That is the gap this exists to close, and it is not hypothetical.
+
+`GET /preflight?url=<any endpoint>` answers the question an agent should ask
+before paying anyone:
+
+```json
+{
+  "recourse_available": false,
+  "verdict": "Live and payable, but the recipient has no collateral posted with
+              Recourse. If this response is stale or malformed, the money is
+              gone and there is nothing to claim against.",
+  "entry": { "settle_count": 75389, "price": 0.006, "network_label": "Base" }
+}
+```
+
+**What we deliberately do not do.** For endpoints we have never bought from we
+report only observable facts — price, recipient, network, settlement count, and
+whether collateral is posted. No reliability score, no rating. Claiming to
+measure a stranger's uptime from a directory listing would undercut the entire
+argument for measuring anything properly.
 
 ## What is provable, what is observed, and what is neither
 

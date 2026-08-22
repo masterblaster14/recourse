@@ -27,6 +27,8 @@ async function boot() {
   connectEvents();
   setInterval(() => { loadProviders(); loadRegistry(); }, 6000);
   setInterval(loadProof, 20000);
+  loadEcosystem();
+  setInterval(loadEcosystem, 300000);
   setInterval(loadHealth, 15000);
 }
 
@@ -191,6 +193,38 @@ function setProof(id, txid) {
   const el = $(id);
   el.className = "v";
   el.innerHTML = `<a href="${txLink(txid)}" target="_blank" rel="noopener">${short(txid, 10)}</a>`;
+}
+
+/* ----------------------------------------------------------- ecosystem ---- */
+
+async function loadEcosystem() {
+  try {
+    const d = await j("/ecosystem");
+    $("eco-total").textContent = d.total;
+    $("eco-bonded").textContent = d.bonded;
+    $("eco-unbonded").textContent = d.unbonded;
+    $("eco-updated").textContent = `${d.networks.map(n => `${n.label} ${n.count}`).join(" · ")}`;
+
+    // Bonded first, then the busiest unbonded — the ones where the most money
+    // has already moved with nothing standing behind it.
+    const rows = [
+      ...d.entries.filter(e => e.recourse.bonded),
+      ...d.entries.filter(e => !e.recourse.bonded).slice(0, 10),
+    ];
+    $("eco-list").innerHTML = rows.map(e => {
+      const host = e.url.replace(/^https?:\/\//, "");
+      const tag = e.recourse.bonded
+        ? `<span class="s bonded">covers ${e.recourse.coverage_calls}</span>`
+        : `<span class="s none">no recourse</span>`;
+      return `<div class="eco-row">
+        <span class="u" title="${e.url}">${host}</span>
+        <span class="n">${e.settle_count.toLocaleString()} settled${e.price !== null ? ` · $${e.price}` : ""}</span>
+        ${tag}
+      </div>`;
+    }).join("");
+  } catch {
+    $("eco-list").innerHTML = `<div class="empty">Bazaar catalogue unavailable right now.</div>`;
+  }
 }
 
 /* --------------------------------------------------------------- proof ---- */

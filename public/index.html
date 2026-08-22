@@ -136,6 +136,31 @@
         </div>
       </div>
 
+      <!-- ecosystem ----------------------------------------------------- -->
+      <div class="card" id="eco-card">
+        <div class="card-head">
+          <div>
+            <h2>The live x402 market</h2>
+            <div class="sub">Every endpoint an agent could pay today, from the public GoPlausible Bazaar</div>
+          </div>
+          <div class="sub" id="eco-updated"></div>
+        </div>
+        <div class="card-body">
+          <div class="eco-headline" id="eco-headline">
+            <div class="eco-num"><span id="eco-total">—</span><small>endpoints indexed</small></div>
+            <div class="eco-num accent"><span id="eco-bonded">—</span><small>backed by collateral</small></div>
+            <div class="eco-num bad"><span id="eco-unbonded">—</span><small>no recourse if they fail</small></div>
+          </div>
+          <div id="eco-list"><div class="empty">Loading the catalogue…</div></div>
+          <div class="note">
+            These are facts read from the public catalogue and from the Recourse registry on chain: price,
+            recipient, settlement count, and whether that recipient has posted collateral. We deliberately do
+            <b>not</b> report reliability for endpoints we have never bought from — a directory listing is not
+            evidence about anyone's uptime.
+          </div>
+        </div>
+      </div>
+
       <!-- feed ---------------------------------------------------------- -->
       <div class="card">
         <div class="card-head">

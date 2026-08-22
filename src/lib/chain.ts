@@ -437,6 +437,24 @@ export async function listBoxes(appId: number): Promise<Uint8Array[]> {
   return (res.boxes ?? []).map(b => toBytes(b.name));
 }
 
+/**
+ * Every address currently registered, read from the box names in one call.
+ *
+ * Cheaper and more honest than probing each candidate: the registry is exactly
+ * the set of `p_`-prefixed boxes, so this cannot drift from what the contract
+ * actually holds.
+ */
+export async function listRegisteredProviders(appId: number): Promise<string[]> {
+  const names = await listBoxes(appId);
+  const out: string[] = [];
+  for (const name of names) {
+    if (name.length !== 34) continue;
+    if (name[0] !== 0x70 || name[1] !== 0x5f) continue; // "p_"
+    out.push(algosdk.encodeAddress(name.subarray(2)));
+  }
+  return out;
+}
+
 export async function destroyApp(
   deployer: algosdk.Account,
   appId: number,

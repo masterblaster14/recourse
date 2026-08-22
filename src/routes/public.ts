@@ -13,6 +13,7 @@ import { history, subscribe } from "../lib/bus.ts";
 import { chainHealthy } from "../lib/chain.ts";
 import { store } from "../lib/db.ts";
 import { providers, slaFor } from "../lib/providers.ts";
+import { ecosystem, preflight } from "../lib/bazaar.ts";
 import { proofView } from "../lib/proof.ts";
 import { providerDirectory, publishedSlas, registryStats } from "../lib/service.ts";
 import { EXPLORE_SAMPLES } from "../lib/recourse-client.ts";
@@ -94,6 +95,32 @@ publicRoutes.get("/registry", async c => {
  * throw away the evidence of every run and the page would go back to reading
  * "awaiting first payment" on a system that has settled hundreds.
  */
+/**
+ * Every x402 endpoint an agent could pay today, and how much of that market has
+ * any collateral behind it. Free, because the answer is mostly "none of it",
+ * and that is the argument for this project existing.
+ */
+publicRoutes.get("/ecosystem", async c => {
+  try {
+    const view = await ecosystem(Number(c.req.query("limit") ?? 300));
+    const compact = c.req.query("full") !== "1";
+    return c.json(compact ? { ...view, entries: view.entries.slice(0, 60) } : view);
+  } catch (err) {
+    return c.json({ error: `bazaar unavailable: ${(err as Error).message}` }, 503);
+  }
+});
+
+/** Pre-flight for any URL: what is an agent exposed to if it pays this? */
+publicRoutes.get("/preflight", async c => {
+  const url = c.req.query("url");
+  if (!url) return c.json({ error: "missing ?url=" }, 400);
+  try {
+    return c.json(await preflight(url));
+  } catch (err) {
+    return c.json({ error: (err as Error).message }, 503);
+  }
+});
+
 publicRoutes.get("/proof", async c => {
   const view = proofView();
   try {

@@ -425,3 +425,27 @@ footer a { color: var(--lime); }
 .note.accent { background: var(--lime-soft); }
 
 .faint { color: var(--text-faint); font-weight: 400; font-size: 0.9em; }
+
+/* ecosystem --------------------------------------------------------------- */
+
+.eco-headline { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; margin-bottom: 16px; }
+.eco-num {
+  border: 1px solid var(--ink); border-radius: var(--radius);
+  padding: 16px 18px; background: var(--grey); text-align: center;
+}
+.eco-num.accent { background: var(--lime); }
+.eco-num.bad { background: var(--ink); color: var(--white); }
+.eco-num span { display: block; font-family: var(--mono); font-size: clamp(24px, 3vw, 34px); font-weight: 700; letter-spacing: -0.03em; line-height: 1; }
+.eco-num small { display: block; margin-top: 7px; font-size: 10.5px; text-transform: uppercase; letter-spacing: .07em; font-weight: 600; color: var(--text-dim); }
+.eco-num.bad small { color: #b0b1bb; }
+
+.eco-row {
+  display: grid; grid-template-columns: 1fr auto auto; gap: 12px; align-items: center;
+  padding: 10px 0; border-bottom: 1px solid var(--line-soft); font-size: 12.5px;
+}
+.eco-row:last-child { border-bottom: none; }
+.eco-row .u { font-family: var(--mono); font-size: 11.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.eco-row .n { font-family: var(--mono); color: var(--text-dim); white-space: nowrap; }
+.eco-row .s { font-size: 10px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; padding: 4px 9px; border-radius: var(--radius-full); border: 1px solid var(--ink); white-space: nowrap; }
+.eco-row .s.none { background: var(--ink); color: var(--white); }
+.eco-row .s.bonded { background: var(--lime); color: var(--ink); }
