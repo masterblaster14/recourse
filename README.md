@@ -26,9 +26,9 @@ endpoints are listed in the public
 | Northwind Oracle registered (SLA committed) | [`APD3KOGP…`](https://lora.algokit.io/testnet/transaction/APD3KOGPB4HBTLDWL3NEGJEZHTPJCYO2BIJ2ERTPO5DNVIJBKAKQ) |
 | Acme Price Feed bond staked | [`DPRBA3CU…`](https://lora.algokit.io/testnet/transaction/DPRBA3CUEVS6UQWRNRHEXZDJD7YJY73ERPDX37JBQCTTCOSUWRMQ) |
 | Northwind Oracle bond staked | [`QE7BUFCU…`](https://lora.algokit.io/testnet/transaction/QE7BUFCUONQHHURDY4I3G6DUFAUHWND3A2LBFGAMNUHSWQ56HEUQ) |
-| **x402 payment settled** | _pending_ |
-| **Upheld claim (refund + slash)** | _pending_ |
-| Verified successes attested | _pending_ |
+| **x402 payment settled** | [`T5WH7WNY…`](https://lora.algokit.io/testnet/transaction/T5WH7WNYREV33ZSYHNKLJ5QB5SJ37SWCDSGUJAP374KJ4ZL4OQQQ) |
+| **Upheld claim (refund + slash)** | [`ULZQOKWD…`](https://lora.algokit.io/testnet/transaction/ULZQOKWD3NCD6JGJ5DEUDSLM3TOBH3NJ4SOBSOA6MC3BVPHYXYKQ) |
+| Verified successes attested | [`YKYIVI5R…`](https://lora.algokit.io/testnet/transaction/YKYIVI5RYQGQVBU4RI4BQPXHBTDFNV4XBF3KKXEHBII3VGUTD7SQ) |
 | Treasury (receives slashes) | [`ISOZHGXD…`](https://lora.algokit.io/testnet/account/ISOZHGXDZ3ZASAN6N2OJNUHI2KUQYQTS5HVZJICAP7IIG5KQLUHKIKJ4EI) |
 | Payment asset | `10458941` (USDC) |
 | Facilitator | [GoPlausible](https://facilitator.goplausible.xyz) |

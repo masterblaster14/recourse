@@ -44,5 +44,20 @@
     "txid": "I3B7IO74MCTDAYV4KN44XHNCWLFBGLCTIQ4HFGXYUN4I3RLMKYKQ",
     "at": "2026-08-22T18:20:29.445Z",
     "note": "app opted into USDC so it can custody bonds"
+  },
+  "x402_payment": {
+    "txid": "T5WH7WNYREV33ZSYHNKLJ5QB5SJ37SWCDSGUJAP374KJ4ZL4OQQQ",
+    "at": "2026-08-22T18:29:07.164363+00:00",
+    "note": "agent paid a bonded provider over x402 via the GoPlausible facilitator"
+  },
+  "claim_upheld": {
+    "txid": "ULZQOKWD3NCD6JGJ5DEUDSLM3TOBH3NJ4SOBSOA6MC3BVPHYXYKQ",
+    "at": "2026-08-22T18:29:07.164363+00:00",
+    "note": "provider signed data 45 minutes old against its own 60s bound: refund + slash from bond"
+  },
+  "record_success": {
+    "txid": "YKYIVI5RYQGQVBU4RI4BQPXHBTDFNV4XBF3KKXEHBII3VGUTD7SQ",
+    "at": "2026-08-22T18:29:07.164363+00:00",
+    "note": "17 verified good responses attested on chain"
   }
 }
