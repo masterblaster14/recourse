@@ -18,17 +18,17 @@ endpoints are listed in the public
 | Item | Link |
 |---|---|
 | Live API + dashboard | _pending deploy_ |
-| Recourse App ID (TestNet) | [`769678323`](https://lora.algokit.io/testnet/application/769678323) |
-| App created | [`MOU4VA5A…`](https://lora.algokit.io/testnet/transaction/MOU4VA5A66OQRG7H7EBO647DLYKBZ5QAU4WPW2G43FPMPIYG5VDQ) |
-| App funded (box MBR + payouts) | [`66EHTWAT…`](https://lora.algokit.io/testnet/transaction/66EHTWATLYAHLKKQFKGLNYZ4XQL5B3PJVWBX5KGROKWZJZQGJBHQ) |
-| App opted into USDC | [`HBEP2NFP…`](https://lora.algokit.io/testnet/transaction/HBEP2NFP4RPJMB337URZQPD3HOJP7RQ55JCGWNHBZNN7TFVZHK4A) |
-| Acme Price Feed registered (SLA committed) | [`WEOSCGJC…`](https://lora.algokit.io/testnet/transaction/WEOSCGJC7JBICOOSRJIMQ2YXLRDFKSPSHDLNYHLR3UZ575RFQCBQ) |
-| Northwind Oracle registered (SLA committed) | [`75ONEEMR…`](https://lora.algokit.io/testnet/transaction/75ONEEMRSFKR4LELCGV3J2XAPN66JIK46VACV33ONKVUZ26DAMEQ) |
-| Acme Price Feed bond staked | [`XZCQRZQE…`](https://lora.algokit.io/testnet/transaction/XZCQRZQEHSZAWU4A77ETWXL2AKIQRO5ON6GMIZPRZXPN6QTVRNEA) |
-| Northwind Oracle bond staked | [`P7MZGEXG…`](https://lora.algokit.io/testnet/transaction/P7MZGEXGUH2HM2QDU2I3HTKHEVVE35TN4DRYLHVCBEOW7MJ437OA) |
-| **x402 payment settled** | [`UY4BZN7T…`](https://lora.algokit.io/testnet/transaction/UY4BZN7TZ2OIVFJW3HEJB5AWLLCOXGRDN5F5RXE7ASGKVHSIWV4Q) |
-| **Upheld claim (refund + slash)** | [`NWHX25NH…`](https://lora.algokit.io/testnet/transaction/NWHX25NH64HYXQIGCG4U67NFWBEK2KP4CKRKMHWSQSP4CZQVTANA) |
-| Verified successes attested | [`DMJX6DM5…`](https://lora.algokit.io/testnet/transaction/DMJX6DM54SHAMUBNIWJPQL3N3CV6JJTA6Y5JCVBRMA2HYOAQYBSA) |
+| Recourse App ID (TestNet) | [`769688356`](https://lora.algokit.io/testnet/application/769688356) |
+| App created | [`MNBW33DM…`](https://lora.algokit.io/testnet/transaction/MNBW33DMHWIRIQMSXWGSU362CPUZUJPQCRMDQRR4HSQRT2MVHHFQ) |
+| App funded (box MBR + payouts) | [`5PYKDRPQ…`](https://lora.algokit.io/testnet/transaction/5PYKDRPQ7E2HWSBRDKABTJGYSVZLKI23EO65ZBJ72XNIHFKQ5DHQ) |
+| App opted into USDC | [`I3B7IO74…`](https://lora.algokit.io/testnet/transaction/I3B7IO74MCTDAYV4KN44XHNCWLFBGLCTIQ4HFGXYUN4I3RLMKYKQ) |
+| Acme Price Feed registered (SLA committed) | [`FJXMMJOI…`](https://lora.algokit.io/testnet/transaction/FJXMMJOI6UU67KSIK2F3GSMEXOUHGJPOYMFET3YFXE3DNPOHD3YQ) |
+| Northwind Oracle registered (SLA committed) | [`APD3KOGP…`](https://lora.algokit.io/testnet/transaction/APD3KOGPB4HBTLDWL3NEGJEZHTPJCYO2BIJ2ERTPO5DNVIJBKAKQ) |
+| Acme Price Feed bond staked | [`DPRBA3CU…`](https://lora.algokit.io/testnet/transaction/DPRBA3CUEVS6UQWRNRHEXZDJD7YJY73ERPDX37JBQCTTCOSUWRMQ) |
+| Northwind Oracle bond staked | [`QE7BUFCU…`](https://lora.algokit.io/testnet/transaction/QE7BUFCUONQHHURDY4I3G6DUFAUHWND3A2LBFGAMNUHSWQ56HEUQ) |
+| **x402 payment settled** | _pending_ |
+| **Upheld claim (refund + slash)** | _pending_ |
+| Verified successes attested | _pending_ |
 | Treasury (receives slashes) | [`ISOZHGXD…`](https://lora.algokit.io/testnet/account/ISOZHGXDZ3ZASAN6N2OJNUHI2KUQYQTS5HVZJICAP7IIG5KQLUHKIKJ4EI) |
 | Payment asset | `10458941` (USDC) |
 | Facilitator | [GoPlausible](https://facilitator.goplausible.xyz) |
@@ -202,21 +202,16 @@ separate from `claim_count`, which is proven on chain. The score shows both.
   800 ms bound, which failed every call — including the honest provider's — and
   the fix was to model the protocol correctly rather than to loosen a number
   until the demo looked good.
-- **A provider can withdraw its bond before a claim lands.** `withdraw_bond` is
-  immediate, so a provider that knows it just served a bad response could race
-  the claim and unstake first. The honest fix is a withdrawal timelock — an
-  unstake request that only settles after a delay longer than the claim window —
-  and it is a contract change we chose not to half-build tonight. Note the
-  attack is self-limiting in one respect: unstaking drops `coverage_calls` to
-  zero, and the routing policy excludes an unbonded provider immediately, so the
-  provider escapes one slash by ending its own access to the market.
-
 - **Compensation goes to whoever submits the proof.** `submit_claim` pays
   `Txn.sender`, not a recorded payer. In practice they are the same party
-  because the signed response is only returned to whoever paid for it, but a
-  payer who leaks a response hands away the claim. Making claims permissionless
-  was the deliberate trade: anyone can prove a violation, and no privileged
-  submitter is needed.
+  because the signed response only goes to whoever paid for it, but a payer who
+  leaks a response hands away the claim. Making claims permissionless was the
+  deliberate trade: anyone can prove a violation, no privileged submitter needed.
+
+- **Reputation is per address, so a Sybil reset is cheap.** A provider whose
+  bond is drained can register a new address and start over. Punishment is
+  bounded by the bond and nothing else. Binding an address to an operator needs
+  an identity layer we have not built.
 
 - **The bond is denominated in the payment asset.** On TestNet that is USDC.
   A bond denominated in a volatile asset would be a design problem, which is why
@@ -227,6 +222,48 @@ separate from `claim_count`, which is proven on chain. The score shows both.
 - **`record_success` is operator-attested**, as described above.
 
 ---
+
+## Why bonds and not escrow
+
+The intuitive fix for "I paid and got junk" is escrow: hold the buyer's money
+until the response is judged good. It is the right primitive for a $5,000
+milestone and the wrong one here, for four reasons.
+
+**There is nowhere to put it in the protocol.** The x402 `exact` AVM scheme
+submits a fixed group — the facilitator's fee-payer transaction plus an asset
+transfer to `payTo`. There is no slot for an application call. Pointing `payTo`
+at an escrow app means that app receives a bare asset transfer with no method
+call and no idea which request it belongs to.
+
+**The economics invert at this size.** Escrow needs on-chain state per call. A
+box keyed by request id costs roughly `2500 + 400 x (34 + 48)` = **0.035 ALGO**
+of minimum balance, locked until release, to protect a **0.001 USDC** payment —
+about six times the value of the thing being protected, plus two extra app calls
+in fees. A bond is `O(providers)`; escrow is `O(calls)`.
+
+**It recovers but does not deter.** Escrow returns your money and costs the
+cheat nothing beyond a sale it did not make. A 9x slash means breaching the SLA
+on a 0.001 call costs 0.01 — cheating is strictly worse than not serving.
+
+**It reintroduces the judgement problem.** Someone has to decide whether to
+release. If the buyer decides, the buyer can take the data and never confirm. If
+a timeout decides, the provider carries receivables risk on every call. If an
+arbitrator decides, centralised trust is back.
+
+> A bond *is* escrow, amortised. The provider locks collateral once and it
+> covers thousands of calls: the same protection at a ten-thousandth of the
+> on-chain footprint, plus a deterrent escrow cannot produce.
+
+## Why 9x, and not some other number
+
+The slash is `9 x price` on top of a full refund, so one breach costs `10 x` the
+call's revenue. The rule is that **cheating must be worse than not serving at
+all** — at 10x, no volume makes a bad response profitable, while an honest
+provider with a near-zero failure rate pays essentially nothing to be bonded.
+
+That asymmetry is the whole mechanism: the bond is cheap precisely for the
+providers who deserve to be trusted, and ruinous for the ones who do not. It is
+Spence signalling with the cost paid in collateral rather than education.
 
 ## Why a blockchain
 
@@ -399,6 +436,26 @@ Two consequences worth calling out:
 `buy` deliberately requires roughly 75 consecutive clean calls. The system does
 not hand out its strongest verdict cheaply, and a score that did would not be
 worth paying for.
+
+## Two attacks this used to be open to
+
+Both were found by reading the contract rather than by anything failing, and
+both are closed and verified on chain by `npm run test:chain`.
+
+**Rewriting the terms you are bonded against.** `register` used to let an
+existing provider overwrite its `pubkey` and `max_staleness` while keeping its
+bond. A provider could serve a batch of stale, signed responses and then rotate
+its key for the price of one transaction: every outstanding signature would stop
+verifying and every pending claim would become unfileable. Raising
+`max_staleness` did the same thing more quietly. Terms are now frozen for as
+long as collateral backs them — changing them requires unbonding first.
+
+**Outrunning a claim with a withdrawal.** `withdraw_bond` used to be immediate.
+Now `request_unbond` starts a cooldown and delists the provider at once, and the
+bond stays claimable throughout. Closing this properly needed a second change
+that is easy to miss: `submit_claim` used to require `active`, so a provider
+could have delisted itself via `request_unbond` and become uncatchable during
+its own cooldown. Claims now depend only on collateral being present.
 
 ## Adversarial checks
 

@@ -85,8 +85,43 @@ publicRoutes.get("/registry", async c => {
   }
 });
 
-/** Every transaction id that proves a part of this system actually ran. */
-publicRoutes.get("/proof", c => c.json(proofView()));
+/**
+ * Every transaction id that proves a part of this system actually ran.
+ *
+ * The file is a committed seed covering deployment and bonding. Run-scoped
+ * proofs — a settled payment, an upheld claim — are backfilled from the store,
+ * because the host filesystem is ephemeral: without this, every restart would
+ * throw away the evidence of every run and the page would go back to reading
+ * "awaiting first payment" on a system that has settled hundreds.
+ */
+publicRoutes.get("/proof", async c => {
+  const view = proofView();
+  try {
+    if (!view.x402_payment) {
+      const [latest] = await store().listPayments(1);
+      if (latest?.txid) {
+        view.x402_payment = {
+          txid: latest.txid, at: latest.ts.toISOString(),
+          note: "agent paid over x402 via the GoPlausible facilitator",
+          url: txUrl(latest.txid),
+        };
+      }
+    }
+    if (!view.claim_upheld) {
+      const [latest] = await store().listClaims(1);
+      if (latest?.txid) {
+        view.claim_upheld = {
+          txid: latest.txid, at: latest.ts.toISOString(),
+          note: `signed data ${latest.age_s}s old: refund + slash from bond`,
+          url: txUrl(latest.txid),
+        };
+      }
+    }
+  } catch {
+    // The seed alone is still a valid answer.
+  }
+  return c.json(view);
+});
 
 publicRoutes.get("/claims", async c => {
   const limit = Math.min(200, Number(c.req.query("limit") ?? 50));
