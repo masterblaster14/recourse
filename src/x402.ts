@@ -45,6 +45,18 @@ function priceFor(micro: number) {
   return { asset: String(env.assetId), amount: String(micro) };
 }
 
+/**
+ * The canonical public URL for a route.
+ *
+ * Behind a TLS-terminating proxy the app only ever sees plain http, so the
+ * derived resource URL comes out as http:// — and that is the string the
+ * facilitator publishes to the Bazaar catalog. Declaring it explicitly keeps
+ * the advertised resource identical to the one agents can actually reach.
+ */
+function resourceUrl(path: string): string {
+  return `${env.publicUrl}${path}`;
+}
+
 const scoreDiscovery = declareDiscoveryExtension({
   output: {
     example: {
@@ -76,6 +88,7 @@ export function buildRoutes(): RoutesConfig {
 
   const routes: RoutesConfig = {
     "GET /score": {
+      resource: resourceUrl("/score"),
       accepts: [
         {
           scheme: "exact",
@@ -93,6 +106,7 @@ export function buildRoutes(): RoutesConfig {
       extensions: scoreDiscovery,
     },
     "GET /feed/compliant": {
+      resource: resourceUrl("/feed/compliant"),
       accepts: [
         {
           scheme: "exact",
@@ -108,6 +122,7 @@ export function buildRoutes(): RoutesConfig {
       extensions: feedDiscovery,
     },
     "GET /feed/stale": {
+      resource: resourceUrl("/feed/stale"),
       accepts: [
         {
           scheme: "exact",
