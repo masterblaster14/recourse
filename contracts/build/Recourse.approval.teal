@@ -3,91 +3,109 @@
 
 // algopy.arc4.ARC4Contract.approval_program() -> uint64:
 main:
-    intcblock 0 1 32 8 960
-    bytecblock 0x705f "asset_id" "bonded" 0x151f7c75 "treasury" "providers" "claims" "slashed" 0x068101 0x635f
+    intcblock 0 1 88 32 1024 86400
+    bytecblock 0x705f "asset_id" "bonded" 0x151f7c75 "providers" "treasury" "claims" "slashed" 0x635f 0x068101
     txn ApplicationID
     bnz main_after_if_else@2
-    // contracts/recourse/contract.py:88
+    // contracts/recourse/contract.py:101
     // self.asset_id = GlobalState(UInt64(0), key="asset_id")
     bytec_1 // "asset_id"
     intc_0 // 0
     app_global_put
-    // contracts/recourse/contract.py:89
+    // contracts/recourse/contract.py:102
     // self.treasury = GlobalState(Account(), key="treasury")
-    bytec 4 // "treasury"
+    bytec 5 // "treasury"
     global ZeroAddress
     app_global_put
-    // contracts/recourse/contract.py:90
+    // contracts/recourse/contract.py:103
     // self.provider_count = GlobalState(UInt64(0), key="providers")
-    bytec 5 // "providers"
+    bytec 4 // "providers"
     intc_0 // 0
     app_global_put
-    // contracts/recourse/contract.py:91
+    // contracts/recourse/contract.py:104
     // self.claim_count = GlobalState(UInt64(0), key="claims")
     bytec 6 // "claims"
     intc_0 // 0
     app_global_put
-    // contracts/recourse/contract.py:92
+    // contracts/recourse/contract.py:105
     // self.total_bonded = GlobalState(UInt64(0), key="bonded")
     bytec_2 // "bonded"
     intc_0 // 0
     app_global_put
-    // contracts/recourse/contract.py:93
+    // contracts/recourse/contract.py:106
     // self.total_slashed = GlobalState(UInt64(0), key="slashed")
     bytec 7 // "slashed"
     intc_0 // 0
     app_global_put
 
 main_after_if_else@2:
-    // contracts/recourse/contract.py:86
+    // contracts/recourse/contract.py:99
+    // class Recourse(ARC4Contract):
+    pushbytes 0x9c86a185 // method "destroy()void"
+    txna ApplicationArgs 0
+    match main_destroy_route@4
+
+main_switch_case_next@5:
+    // contracts/recourse/contract.py:99
     // class Recourse(ARC4Contract):
     txn OnCompletion
     !
     assert
     txn ApplicationID
-    bz main_create_NoOp@16
-    pushbytess 0x034d4f7a 0xfcd8caaf 0x47576851 0x2a5e686a 0x3fcd7fd1 0x70815cb3 0x3f5da047 0x05d7ae8b 0x5fdb4106 0xe83a87ab // method "opt_in_asset()void", method "set_treasury(address)void", method "register(byte[32],byte[32],uint64,uint64,uint64)void", method "deposit_bond(axfer)uint64", method "withdraw_bond(uint64)uint64", method "submit_claim(address,byte[],byte[],uint64,byte[])uint64", method "record_success(address,uint64)uint64", method "read_provider(address)(byte[32],byte[32],uint64,uint64,uint64,uint64,uint64,uint64,uint64,bool)", method "is_claimed(byte[])bool", method "noop()void"
+    bz main_create_NoOp@21
+    pushbytess 0x034d4f7a 0xfcd8caaf 0x47576851 0x2a5e686a 0x378b8ef1 0x3fcd7fd1 0x8161d4d8 0x70815cb3 0x3f5da047 0x93003300 0xe8bda425 0x5fdb4106 0xe83a87ab // method "opt_in_asset()void", method "set_treasury(address)void", method "register(byte[32],byte[32],uint64,uint64,uint64)void", method "deposit_bond(axfer)uint64", method "request_unbond()uint64", method "withdraw_bond(uint64)uint64", method "deregister()void", method "submit_claim(address,byte[],byte[],uint64,byte[])uint64", method "record_success(address,uint64)uint64", method "prune_claim(byte[])void", method "read_provider(address)(byte[32],byte[32],uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,bool)", method "is_claimed(byte[])bool", method "noop()void"
     txna ApplicationArgs 0
-    match opt_in_asset set_treasury register deposit_bond withdraw_bond submit_claim record_success read_provider is_claimed main_noop_route@14
+    match opt_in_asset set_treasury register deposit_bond request_unbond withdraw_bond deregister submit_claim record_success prune_claim read_provider is_claimed main_noop_route@19
     err
 
-main_noop_route@14:
-    // contracts/recourse/contract.py:349
+main_noop_route@19:
+    // contracts/recourse/contract.py:464
     // @arc4.abimethod
     intc_1 // 1
     return
 
-main_create_NoOp@16:
-    // contracts/recourse/contract.py:86
+main_create_NoOp@21:
+    // contracts/recourse/contract.py:99
     // class Recourse(ARC4Contract):
     pushbytes 0x240d2f67 // method "create(uint64)void"
     txna ApplicationArgs 0
     match create
     err
 
+main_destroy_route@4:
+    // contracts/recourse/contract.py:423
+    // @arc4.abimethod(allow_actions=["DeleteApplication"])
+    txn OnCompletion
+    pushint 5 // DeleteApplication
+    ==
+    txn ApplicationID
+    &&
+    assert
+    b destroy
+
 
 // contract.Recourse.create[routing]() -> void:
 create:
-    // contracts/recourse/contract.py:102
+    // contracts/recourse/contract.py:115
     // @arc4.abimethod(create="require")
     txna ApplicationArgs 1
     dup
     len
-    intc_3 // 8
+    pushint 8
     ==
     assert // invalid number of bytes for arc4.uint64
     btoi
-    // contracts/recourse/contract.py:104
+    // contracts/recourse/contract.py:117
     // self.asset_id.value = asset_id
     bytec_1 // "asset_id"
     swap
     app_global_put
-    // contracts/recourse/contract.py:105
+    // contracts/recourse/contract.py:118
     // self.treasury.value = Txn.sender
-    bytec 4 // "treasury"
+    bytec 5 // "treasury"
     txn Sender
     app_global_put
-    // contracts/recourse/contract.py:102
+    // contracts/recourse/contract.py:115
     // @arc4.abimethod(create="require")
     intc_1 // 1
     return
@@ -95,13 +113,13 @@ create:
 
 // contract.Recourse.opt_in_asset[routing]() -> void:
 opt_in_asset:
-    // contracts/recourse/contract.py:110
+    // contracts/recourse/contract.py:123
     // assert Txn.sender == Global.creator_address, "creator only"
     txn Sender
     global CreatorAddress
     ==
     assert // creator only
-    // contracts/recourse/contract.py:111-116
+    // contracts/recourse/contract.py:124-129
     // itxn.AssetTransfer(
     //     xfer_asset=self.asset_id.value,
     //     asset_receiver=Global.current_application_address,
@@ -109,30 +127,30 @@ opt_in_asset:
     //     fee=0,
     // ).submit()
     itxn_begin
-    // contracts/recourse/contract.py:112
+    // contracts/recourse/contract.py:125
     // xfer_asset=self.asset_id.value,
     intc_0 // 0
     bytec_1 // "asset_id"
     app_global_get_ex
     assert // check self.asset_id exists
-    // contracts/recourse/contract.py:113
+    // contracts/recourse/contract.py:126
     // asset_receiver=Global.current_application_address,
     global CurrentApplicationAddress
-    // contracts/recourse/contract.py:114
+    // contracts/recourse/contract.py:127
     // asset_amount=0,
     intc_0 // 0
     itxn_field AssetAmount
     itxn_field AssetReceiver
     itxn_field XferAsset
-    // contracts/recourse/contract.py:111
+    // contracts/recourse/contract.py:124
     // itxn.AssetTransfer(
     pushint 4 // axfer
     itxn_field TypeEnum
-    // contracts/recourse/contract.py:115
+    // contracts/recourse/contract.py:128
     // fee=0,
     intc_0 // 0
     itxn_field Fee
-    // contracts/recourse/contract.py:111-116
+    // contracts/recourse/contract.py:124-129
     // itxn.AssetTransfer(
     //     xfer_asset=self.asset_id.value,
     //     asset_receiver=Global.current_application_address,
@@ -140,7 +158,7 @@ opt_in_asset:
     //     fee=0,
     // ).submit()
     itxn_submit
-    // contracts/recourse/contract.py:107
+    // contracts/recourse/contract.py:120
     // @arc4.abimethod
     intc_1 // 1
     return
@@ -148,26 +166,26 @@ opt_in_asset:
 
 // contract.Recourse.set_treasury[routing]() -> void:
 set_treasury:
-    // contracts/recourse/contract.py:118
+    // contracts/recourse/contract.py:131
     // @arc4.abimethod
     txna ApplicationArgs 1
     dup
     len
-    intc_2 // 32
+    intc_3 // 32
     ==
     assert // invalid number of bytes for arc4.static_array<arc4.uint8, 32>
-    // contracts/recourse/contract.py:120
+    // contracts/recourse/contract.py:133
     // assert Txn.sender == Global.creator_address, "creator only"
     txn Sender
     global CreatorAddress
     ==
     assert // creator only
-    // contracts/recourse/contract.py:121
+    // contracts/recourse/contract.py:134
     // self.treasury.value = treasury
-    bytec 4 // "treasury"
+    bytec 5 // "treasury"
     swap
     app_global_put
-    // contracts/recourse/contract.py:118
+    // contracts/recourse/contract.py:131
     // @arc4.abimethod
     intc_1 // 1
     return
@@ -175,19 +193,19 @@ set_treasury:
 
 // contract.Recourse.register[routing]() -> void:
 register:
-    // contracts/recourse/contract.py:125
+    // contracts/recourse/contract.py:138
     // @arc4.abimethod
     txna ApplicationArgs 1
     dup
     len
-    intc_2 // 32
+    intc_3 // 32
     ==
     assert // invalid number of bytes for arc4.static_array<arc4.uint8, 32>
     txna ApplicationArgs 2
     dup
     cover 2
     len
-    intc_2 // 32
+    intc_3 // 32
     ==
     assert // invalid number of bytes for arc4.static_array<arc4.uint8, 32>
     txna ApplicationArgs 3
@@ -195,7 +213,7 @@ register:
     cover 2
     dup
     len
-    intc_3 // 8
+    pushint 8
     ==
     assert // invalid number of bytes for arc4.uint64
     btoi
@@ -204,7 +222,7 @@ register:
     cover 5
     dup
     len
-    intc_3 // 8
+    pushint 8
     ==
     assert // invalid number of bytes for arc4.uint64
     btoi
@@ -212,17 +230,17 @@ register:
     dup
     cover 3
     len
-    intc_3 // 8
+    pushint 8
     ==
     assert // invalid number of bytes for arc4.uint64
-    // contracts/recourse/contract.py:138
+    // contracts/recourse/contract.py:151
     // assert price_micro > 0, "price must be positive"
     swap
     assert // price must be positive
-    // contracts/recourse/contract.py:139
+    // contracts/recourse/contract.py:152
     // assert max_staleness > 0, "staleness bound must be positive"
     assert // staleness bound must be positive
-    // contracts/recourse/contract.py:141
+    // contracts/recourse/contract.py:154
     // if Txn.sender not in self.providers:
     bytec_0 // 0x705f
     txn Sender
@@ -230,22 +248,22 @@ register:
     box_len
     bury 1
     bnz register_else_body@3
-    // contracts/recourse/contract.py:142
+    // contracts/recourse/contract.py:155
     // self.provider_count.value += 1
     intc_0 // 0
-    bytec 5 // "providers"
+    bytec 4 // "providers"
     app_global_get_ex
     assert // check self.provider_count exists
     intc_1 // 1
     +
-    bytec 5 // "providers"
+    bytec 4 // "providers"
     swap
     app_global_put
-    // contracts/recourse/contract.py:149
+    // contracts/recourse/contract.py:162
     // bond_micro=arc4.UInt64(0),
     intc_0 // 0
     itob
-    // contracts/recourse/contract.py:143-154
+    // contracts/recourse/contract.py:156-168
     // self.providers[Txn.sender] = Provider(
     //     pubkey=pubkey.copy(),
     //     sla_hash=sla_hash.copy(),
@@ -256,6 +274,7 @@ register:
     //     success_count=arc4.UInt64(0),
     //     claim_count=arc4.UInt64(0),
     //     slashed_micro=arc4.UInt64(0),
+    //     unbond_at=arc4.UInt64(0),
     //     active=arc4.Bool(True),  # noqa: FBT003
     // )
     uncover 2
@@ -273,12 +292,14 @@ register:
     concat
     dig 1
     concat
+    dig 1
+    concat
     swap
     concat
-    // contracts/recourse/contract.py:153
+    // contracts/recourse/contract.py:167
     // active=arc4.Bool(True),  # noqa: FBT003
     pushbytes 0x80
-    // contracts/recourse/contract.py:143-154
+    // contracts/recourse/contract.py:156-168
     // self.providers[Txn.sender] = Provider(
     //     pubkey=pubkey.copy(),
     //     sla_hash=sla_hash.copy(),
@@ -289,15 +310,16 @@ register:
     //     success_count=arc4.UInt64(0),
     //     claim_count=arc4.UInt64(0),
     //     slashed_micro=arc4.UInt64(0),
+    //     unbond_at=arc4.UInt64(0),
     //     active=arc4.Bool(True),  # noqa: FBT003
     // )
     concat
-    // contracts/recourse/contract.py:143
+    // contracts/recourse/contract.py:156
     // self.providers[Txn.sender] = Provider(
     bytec_0 // 0x705f
     txn Sender
     concat
-    // contracts/recourse/contract.py:143-154
+    // contracts/recourse/contract.py:156-168
     // self.providers[Txn.sender] = Provider(
     //     pubkey=pubkey.copy(),
     //     sla_hash=sla_hash.copy(),
@@ -308,16 +330,17 @@ register:
     //     success_count=arc4.UInt64(0),
     //     claim_count=arc4.UInt64(0),
     //     slashed_micro=arc4.UInt64(0),
+    //     unbond_at=arc4.UInt64(0),
     //     active=arc4.Bool(True),  # noqa: FBT003
     // )
     swap
     box_put
 
 register_after_if_else@4:
-    // contracts/recourse/contract.py:167
+    // contracts/recourse/contract.py:192
     // provider=arc4.Address(Txn.sender),
     txn Sender
-    // contracts/recourse/contract.py:166-171
+    // contracts/recourse/contract.py:191-196
     // ProviderRegistered(
     //     provider=arc4.Address(Txn.sender),
     //     price_micro=arc4.UInt64(price_micro),
@@ -330,7 +353,7 @@ register_after_if_else@4:
     concat
     swap
     concat
-    // contracts/recourse/contract.py:165-172
+    // contracts/recourse/contract.py:190-197
     // arc4.emit(
     //     ProviderRegistered(
     //         provider=arc4.Address(Txn.sender),
@@ -343,41 +366,73 @@ register_after_if_else@4:
     swap
     concat
     log
-    // contracts/recourse/contract.py:125
+    // contracts/recourse/contract.py:138
     // @arc4.abimethod
     intc_1 // 1
     return
 
 register_else_body@3:
-    // contracts/recourse/contract.py:156-157
-    // # Re-publishing an SLA keeps the accumulated history and bond.
+    // contracts/recourse/contract.py:170-179
+    // # A bonded provider may NOT restate its terms.
+    // #
+    // # Without this a provider could serve a batch of stale, signed
+    // # responses and then rotate `pubkey` for a couple of thousand
+    // # microAlgos: every outstanding signature would stop verifying and
+    // # every claim against it would become unfileable. Raising
+    // # `max_staleness` achieves the same thing more quietly. Your
+    // # commitment is frozen for exactly as long as your collateral is
+    // # backing it — to change terms, unbond and re-register.
+    // assert self.providers[Txn.sender].bond_micro.native == 0, (
+    bytec_0 // 0x705f
+    txn Sender
+    concat
+    box_get
+    assert // check self.providers entry exists
+    intc_2 // 88
+    extract_uint64
+    !
+    // contracts/recourse/contract.py:170-181
+    // # A bonded provider may NOT restate its terms.
+    // #
+    // # Without this a provider could serve a batch of stale, signed
+    // # responses and then rotate `pubkey` for a couple of thousand
+    // # microAlgos: every outstanding signature would stop verifying and
+    // # every claim against it would become unfileable. Raising
+    // # `max_staleness` achieves the same thing more quietly. Your
+    // # commitment is frozen for exactly as long as your collateral is
+    // # backing it — to change terms, unbond and re-register.
+    // assert self.providers[Txn.sender].bond_micro.native == 0, (
+    //     "unbond before changing your published terms"
+    // )
+    assert // unbond before changing your published terms
+    // contracts/recourse/contract.py:182
     // p = self.providers[Txn.sender].copy()
     bytec_0 // 0x705f
     txn Sender
     concat
     box_get
     assert // check self.providers entry exists
-    // contracts/recourse/contract.py:158
+    // contracts/recourse/contract.py:183
     // p.pubkey = pubkey.copy()
     uncover 2
     replace2 0
-    // contracts/recourse/contract.py:159
+    // contracts/recourse/contract.py:184
     // p.sla_hash = sla_hash.copy()
     dig 3
     replace2 32
-    // contracts/recourse/contract.py:160
+    // contracts/recourse/contract.py:185
     // p.price_micro = arc4.UInt64(price_micro)
     dig 2
     replace2 64
-    // contracts/recourse/contract.py:161
+    // contracts/recourse/contract.py:186
     // p.max_staleness = arc4.UInt64(max_staleness)
     dig 4
     replace2 72
-    // contracts/recourse/contract.py:162
+    // contracts/recourse/contract.py:187
     // p.max_latency_ms = arc4.UInt64(max_latency_ms)
     swap
     replace2 80
-    // contracts/recourse/contract.py:163
+    // contracts/recourse/contract.py:188
     // self.providers[Txn.sender] = p.copy()
     bytec_0 // 0x705f
     txn Sender
@@ -389,7 +444,7 @@ register_else_body@3:
 
 // contract.Recourse.deposit_bond[routing]() -> void:
 deposit_bond:
-    // contracts/recourse/contract.py:174
+    // contracts/recourse/contract.py:199
     // @arc4.abimethod
     txn GroupIndex
     intc_1 // 1
@@ -399,7 +454,7 @@ deposit_bond:
     pushint 4 // axfer
     ==
     assert // transaction type is axfer
-    // contracts/recourse/contract.py:177
+    // contracts/recourse/contract.py:202
     // assert Txn.sender in self.providers, "not registered"
     bytec_0 // 0x705f
     txn Sender
@@ -407,14 +462,14 @@ deposit_bond:
     box_len
     bury 1
     assert // not registered
-    // contracts/recourse/contract.py:178
+    // contracts/recourse/contract.py:203
     // assert axfer.asset_receiver == Global.current_application_address, "wrong receiver"
     dup
     gtxns AssetReceiver
     global CurrentApplicationAddress
     ==
     assert // wrong receiver
-    // contracts/recourse/contract.py:179
+    // contracts/recourse/contract.py:204
     // assert axfer.xfer_asset.id == self.asset_id.value, "wrong asset"
     dup
     gtxns XferAsset
@@ -424,47 +479,53 @@ deposit_bond:
     assert // check self.asset_id exists
     ==
     assert // wrong asset
-    // contracts/recourse/contract.py:180
+    // contracts/recourse/contract.py:205
     // assert axfer.sender == Txn.sender, "sender mismatch"
     dup
     gtxns Sender
     txn Sender
     ==
     assert // sender mismatch
-    // contracts/recourse/contract.py:181
+    // contracts/recourse/contract.py:206
     // assert axfer.asset_amount > 0, "empty deposit"
     gtxns AssetAmount
     dup
     assert // empty deposit
-    // contracts/recourse/contract.py:183
+    // contracts/recourse/contract.py:208
     // p = self.providers[Txn.sender].copy()
     bytec_0 // 0x705f
     txn Sender
     concat
     box_get
     assert // check self.providers entry exists
-    // contracts/recourse/contract.py:184
+    // contracts/recourse/contract.py:209
     // p.bond_micro = arc4.UInt64(p.bond_micro.native + axfer.asset_amount)
     dup
-    pushint 88
+    intc_2 // 88
     extract_uint64
     dig 2
     +
     itob
     replace2 88
-    // contracts/recourse/contract.py:185
+    // contracts/recourse/contract.py:210-211
+    // # Adding collateral cancels any pending exit and relists the provider.
+    // p.unbond_at = arc4.UInt64(0)
+    intc_0 // 0
+    itob
+    replace2 120
+    // contracts/recourse/contract.py:212
     // p.active = arc4.Bool(True)  # noqa: FBT003
-    intc 4 // 960
+    intc 4 // 1024
     intc_1 // 1
     setbit
-    // contracts/recourse/contract.py:186
+    // contracts/recourse/contract.py:213
     // self.providers[Txn.sender] = p.copy()
     bytec_0 // 0x705f
     txn Sender
     concat
     dig 1
     box_put
-    // contracts/recourse/contract.py:188
+    // contracts/recourse/contract.py:215
     // self.total_bonded.value += axfer.asset_amount
     intc_0 // 0
     bytec_2 // "bonded"
@@ -475,18 +536,18 @@ deposit_bond:
     bytec_2 // "bonded"
     swap
     app_global_put
-    // contracts/recourse/contract.py:192
+    // contracts/recourse/contract.py:219
     // provider=arc4.Address(Txn.sender),
     txn Sender
-    // contracts/recourse/contract.py:193
+    // contracts/recourse/contract.py:220
     // amount_micro=arc4.UInt64(axfer.asset_amount),
     uncover 2
     itob
-    // contracts/recourse/contract.py:194
+    // contracts/recourse/contract.py:221
     // bond_micro=p.bond_micro,
     uncover 2
     extract 88 8
-    // contracts/recourse/contract.py:191-195
+    // contracts/recourse/contract.py:218-222
     // BondDeposited(
     //     provider=arc4.Address(Txn.sender),
     //     amount_micro=arc4.UInt64(axfer.asset_amount),
@@ -496,7 +557,7 @@ deposit_bond:
     concat
     dig 1
     concat
-    // contracts/recourse/contract.py:190-196
+    // contracts/recourse/contract.py:217-223
     // arc4.emit(
     //     BondDeposited(
     //         provider=arc4.Address(Txn.sender),
@@ -508,7 +569,62 @@ deposit_bond:
     swap
     concat
     log
-    // contracts/recourse/contract.py:174
+    // contracts/recourse/contract.py:199
+    // @arc4.abimethod
+    bytec_3 // 0x151f7c75
+    swap
+    concat
+    log
+    intc_1 // 1
+    return
+
+
+// contract.Recourse.request_unbond[routing]() -> void:
+request_unbond:
+    // contracts/recourse/contract.py:237
+    // assert Txn.sender in self.providers, "not registered"
+    bytec_0 // 0x705f
+    txn Sender
+    concat
+    box_len
+    bury 1
+    assert // not registered
+    // contracts/recourse/contract.py:238
+    // p = self.providers[Txn.sender].copy()
+    bytec_0 // 0x705f
+    txn Sender
+    concat
+    box_get
+    assert // check self.providers entry exists
+    // contracts/recourse/contract.py:239
+    // assert p.bond_micro.native > 0, "nothing bonded"
+    dup
+    intc_2 // 88
+    extract_uint64
+    assert // nothing bonded
+    // contracts/recourse/contract.py:240
+    // p.unbond_at = arc4.UInt64(Global.latest_timestamp + UNBOND_DELAY_SECONDS)
+    global LatestTimestamp
+    pushint 300
+    +
+    itob
+    replace2 120
+    // contracts/recourse/contract.py:241
+    // p.active = arc4.Bool(False)  # noqa: FBT003
+    intc 4 // 1024
+    intc_0 // 0
+    setbit
+    // contracts/recourse/contract.py:242
+    // self.providers[Txn.sender] = p.copy()
+    bytec_0 // 0x705f
+    txn Sender
+    concat
+    dig 1
+    box_put
+    // contracts/recourse/contract.py:243
+    // return p.unbond_at.native
+    extract 120 8
+    // contracts/recourse/contract.py:226
     // @arc4.abimethod
     bytec_3 // 0x151f7c75
     swap
@@ -520,17 +636,17 @@ deposit_bond:
 
 // contract.Recourse.withdraw_bond[routing]() -> void:
 withdraw_bond:
-    // contracts/recourse/contract.py:199
+    // contracts/recourse/contract.py:245
     // @arc4.abimethod
     txna ApplicationArgs 1
     dup
     len
-    intc_3 // 8
+    pushint 8
     ==
     assert // invalid number of bytes for arc4.uint64
     btoi
     dup
-    // contracts/recourse/contract.py:202
+    // contracts/recourse/contract.py:248
     // assert Txn.sender in self.providers, "not registered"
     bytec_0 // 0x705f
     txn Sender
@@ -538,27 +654,39 @@ withdraw_bond:
     box_len
     bury 1
     assert // not registered
-    // contracts/recourse/contract.py:203
+    // contracts/recourse/contract.py:249
     // p = self.providers[Txn.sender].copy()
     bytec_0 // 0x705f
     txn Sender
     concat
     box_get
     assert // check self.providers entry exists
-    // contracts/recourse/contract.py:204
+    // contracts/recourse/contract.py:250
     // assert amount > 0, "nothing to withdraw"
     dig 1
     assert // nothing to withdraw
-    // contracts/recourse/contract.py:205
+    // contracts/recourse/contract.py:251
     // assert amount <= p.bond_micro.native, "insufficient bond"
     dup
-    pushint 88
+    intc_2 // 88
     extract_uint64
     dig 2
     dig 1
     <=
     assert // insufficient bond
-    // contracts/recourse/contract.py:207-212
+    // contracts/recourse/contract.py:252
+    // assert p.unbond_at.native > 0, "call request_unbond first"
+    dig 1
+    pushint 120
+    extract_uint64
+    dup
+    assert // call request_unbond first
+    // contracts/recourse/contract.py:253
+    // assert Global.latest_timestamp >= p.unbond_at.native, "cooldown has not elapsed"
+    global LatestTimestamp
+    <=
+    assert // cooldown has not elapsed
+    // contracts/recourse/contract.py:255-260
     // itxn.AssetTransfer(
     //     xfer_asset=self.asset_id.value,
     //     asset_receiver=Txn.sender,
@@ -566,28 +694,28 @@ withdraw_bond:
     //     fee=0,
     // ).submit()
     itxn_begin
-    // contracts/recourse/contract.py:208
+    // contracts/recourse/contract.py:256
     // xfer_asset=self.asset_id.value,
     intc_0 // 0
     bytec_1 // "asset_id"
     app_global_get_ex
     assert // check self.asset_id exists
-    // contracts/recourse/contract.py:209
+    // contracts/recourse/contract.py:257
     // asset_receiver=Txn.sender,
     txn Sender
     dig 4
     itxn_field AssetAmount
     itxn_field AssetReceiver
     itxn_field XferAsset
-    // contracts/recourse/contract.py:207
+    // contracts/recourse/contract.py:255
     // itxn.AssetTransfer(
     pushint 4 // axfer
     itxn_field TypeEnum
-    // contracts/recourse/contract.py:211
+    // contracts/recourse/contract.py:259
     // fee=0,
     intc_0 // 0
     itxn_field Fee
-    // contracts/recourse/contract.py:207-212
+    // contracts/recourse/contract.py:255-260
     // itxn.AssetTransfer(
     //     xfer_asset=self.asset_id.value,
     //     asset_receiver=Txn.sender,
@@ -595,33 +723,33 @@ withdraw_bond:
     //     fee=0,
     // ).submit()
     itxn_submit
-    // contracts/recourse/contract.py:214
+    // contracts/recourse/contract.py:262
     // p.bond_micro = arc4.UInt64(p.bond_micro.native - amount)
     uncover 2
     -
     itob
     replace2 88
     dup
-    // contracts/recourse/contract.py:215
+    // contracts/recourse/contract.py:263
     // if p.bond_micro.native == 0:
-    pushint 88
+    intc_2 // 88
     extract_uint64
     bnz withdraw_bond_after_if_else@4
-    // contracts/recourse/contract.py:216
+    // contracts/recourse/contract.py:264
     // p.active = arc4.Bool(False)  # noqa: FBT003
-    intc 4 // 960
+    intc 4 // 1024
     intc_0 // 0
     setbit
 
 withdraw_bond_after_if_else@4:
-    // contracts/recourse/contract.py:217
+    // contracts/recourse/contract.py:265
     // self.providers[Txn.sender] = p.copy()
     bytec_0 // 0x705f
     txn Sender
     concat
     dig 1
     box_put
-    // contracts/recourse/contract.py:218
+    // contracts/recourse/contract.py:266
     // self.total_bonded.value -= amount
     intc_0 // 0
     bytec_2 // "bonded"
@@ -632,15 +760,60 @@ withdraw_bond_after_if_else@4:
     bytec_2 // "bonded"
     swap
     app_global_put
-    // contracts/recourse/contract.py:219
+    // contracts/recourse/contract.py:267
     // return p.bond_micro.native
     extract 88 8
-    // contracts/recourse/contract.py:199
+    // contracts/recourse/contract.py:245
     // @arc4.abimethod
     bytec_3 // 0x151f7c75
     swap
     concat
     log
+    intc_1 // 1
+    return
+
+
+// contract.Recourse.deregister[routing]() -> void:
+deregister:
+    // contracts/recourse/contract.py:277
+    // assert Txn.sender in self.providers, "not registered"
+    bytec_0 // 0x705f
+    txn Sender
+    concat
+    box_len
+    bury 1
+    assert // not registered
+    // contracts/recourse/contract.py:278
+    // assert self.providers[Txn.sender].bond_micro.native == 0, "withdraw the bond first"
+    bytec_0 // 0x705f
+    txn Sender
+    concat
+    box_get
+    assert // check self.providers entry exists
+    intc_2 // 88
+    extract_uint64
+    !
+    assert // withdraw the bond first
+    // contracts/recourse/contract.py:279
+    // del self.providers[Txn.sender]
+    bytec_0 // 0x705f
+    txn Sender
+    concat
+    box_del
+    pop
+    // contracts/recourse/contract.py:280
+    // self.provider_count.value -= 1
+    intc_0 // 0
+    bytec 4 // "providers"
+    app_global_get_ex
+    assert // check self.provider_count exists
+    intc_1 // 1
+    -
+    bytec 4 // "providers"
+    swap
+    app_global_put
+    // contracts/recourse/contract.py:269
+    // @arc4.abimethod
     intc_1 // 1
     return
 
@@ -651,12 +824,12 @@ submit_claim:
     dup
     pushbytes ""
     dupn 3
-    // contracts/recourse/contract.py:223
+    // contracts/recourse/contract.py:284
     // @arc4.abimethod
     txna ApplicationArgs 1
     dup
     len
-    intc_2 // 32
+    intc_3 // 32
     ==
     assert // invalid number of bytes for arc4.static_array<arc4.uint8, 32>
     txna ApplicationArgs 2
@@ -685,7 +858,7 @@ submit_claim:
     txna ApplicationArgs 4
     dup
     len
-    intc_3 // 8
+    pushint 8
     ==
     assert // invalid number of bytes for arc4.uint64
     btoi
@@ -712,15 +885,15 @@ submit_claim_while_top@15:
     itxn_field TypeEnum
     pushint 5 // DeleteApplication
     itxn_field OnCompletion
-    bytec 8 // 0x068101
+    bytec 9 // 0x068101
     itxn_field ApprovalProgram
-    bytec 8 // 0x068101
+    bytec 9 // 0x068101
     itxn_field ClearStateProgram
     itxn_submit
     b submit_claim_while_top@15
 
 submit_claim_after_while@20:
-    // contracts/recourse/contract.py:248
+    // contracts/recourse/contract.py:309
     // assert provider in self.providers, "unknown provider"
     bytec_0 // 0x705f
     dig 4
@@ -731,34 +904,34 @@ submit_claim_after_while@20:
     box_len
     bury 1
     assert // unknown provider
-    // contracts/recourse/contract.py:249
+    // contracts/recourse/contract.py:310
     // assert request_id.length == 32, "bad request_id"
     dig 5
     dup
     len
-    intc_2 // 32
+    intc_3 // 32
     ==
     assert // bad request_id
-    // contracts/recourse/contract.py:250
+    // contracts/recourse/contract.py:311
     // assert response_hash.length == 32, "bad response_hash"
     uncover 3
     dup
-    cover 3
+    cover 2
     len
-    intc_2 // 32
+    intc_3 // 32
     ==
     assert // bad response_hash
-    // contracts/recourse/contract.py:251
+    // contracts/recourse/contract.py:312
     // assert signature.length == 64, "bad signature"
     dig 3
     len
     pushint 64
     ==
     assert // bad signature
-    // contracts/recourse/contract.py:253-254
+    // contracts/recourse/contract.py:314-315
     // # Replay guard: one response, one claim, ever.
     // assert request_id not in self.claims, "already claimed"
-    bytec 9 // 0x635f
+    bytec 8 // 0x635f
     dig 1
     concat
     dup
@@ -767,35 +940,27 @@ submit_claim_after_while@20:
     bury 1
     !
     assert // already claimed
-    // contracts/recourse/contract.py:256
+    // contracts/recourse/contract.py:317
     // p = self.providers[provider].copy()
-    swap
+    uncover 2
     box_get
     pop
     dup
     cover 4
-    // contracts/recourse/contract.py:257
-    // assert p.active.native, "provider inactive"
-    dup
-    intc 4 // 960
-    getbit
-    pushbytes 0x00
-    intc_0 // 0
-    uncover 2
-    setbit
-    intc_0 // 0
-    getbit
-    assert // provider inactive
-    // contracts/recourse/contract.py:258
+    // contracts/recourse/contract.py:318-322
+    // # Deliberately does NOT require `active`. `active` means "listed for new
+    // # traffic"; it must not gate claims, or a provider could delist itself
+    // # via request_unbond and become uncatchable during its own cooldown.
+    // # Having collateral is the only condition that matters here.
     // assert p.bond_micro.native > 0, "no bond"
     dup
-    pushint 88
+    intc_2 // 88
     extract_uint64
     dup
     bury 11
     dup
     assert // no bond
-    // contracts/recourse/contract.py:260-261
+    // contracts/recourse/contract.py:324-325
     // # 1. The provider signed this exact response with this exact timestamp.
     // msg = request_id + response_hash + op.itob(data_timestamp)
     uncover 2
@@ -806,7 +971,7 @@ submit_claim_after_while@20:
     cover 3
     itob
     concat
-    // contracts/recourse/contract.py:262
+    // contracts/recourse/contract.py:326
     // assert op.ed25519verify_bare(msg, signature, p.pubkey.bytes), "bad signature"
     dig 3
     extract 0 32
@@ -815,28 +980,36 @@ submit_claim_after_while@20:
     uncover 2
     ed25519verify_bare
     assert // bad signature
-    // contracts/recourse/contract.py:264-265
+    // contracts/recourse/contract.py:328-329
     // # 2. That timestamp violates the staleness bound the provider published.
     // assert Global.latest_timestamp > data_timestamp, "timestamp in the future"
     global LatestTimestamp
     dig 2
     >
     assert // timestamp in the future
-    // contracts/recourse/contract.py:266
+    // contracts/recourse/contract.py:330
     // age = Global.latest_timestamp - data_timestamp
     global LatestTimestamp
     uncover 2
     -
     dup
     bury 10
-    // contracts/recourse/contract.py:267
+    // contracts/recourse/contract.py:331
     // assert age > p.max_staleness.native, "within SLA"
     dig 2
     pushint 72
     extract_uint64
-    >
+    dig 1
+    <
     assert // within SLA
-    // contracts/recourse/contract.py:269-270
+    // contracts/recourse/contract.py:332-334
+    // # Disputes have to be raised while they still matter. This also bounds
+    // # how long the replay-guard box has to exist, so it can be reclaimed.
+    // assert age < MAX_CLAIM_AGE_SECONDS, "too old to claim"
+    intc 5 // 86400
+    <
+    assert // too old to claim
+    // contracts/recourse/contract.py:336-337
     // # 3. Settle out of the bond.
     // refund = p.price_micro.native
     swap
@@ -844,19 +1017,19 @@ submit_claim_after_while@20:
     extract_uint64
     dup
     cover 3
-    // contracts/recourse/contract.py:271
+    // contracts/recourse/contract.py:338
     // penalty = p.price_micro.native * UInt64(PENALTY_MULTIPLIER)
     dup
     pushint 9
     *
     dup
     bury 10
-    // contracts/recourse/contract.py:272
+    // contracts/recourse/contract.py:339
     // total = refund + penalty
     +
     dup
     bury 7
-    // contracts/recourse/contract.py:274
+    // contracts/recourse/contract.py:341
     // if total > p.bond_micro.native:
     <
     bnz submit_claim_if_body@2
@@ -864,11 +1037,11 @@ submit_claim_after_while@20:
     bury 5
 
 submit_claim_after_if_else@3:
-    // contracts/recourse/contract.py:281
+    // contracts/recourse/contract.py:348
     // if refund > 0:
     dig 4
     bz submit_claim_after_if_else@6
-    // contracts/recourse/contract.py:282-287
+    // contracts/recourse/contract.py:349-354
     // itxn.AssetTransfer(
     //     xfer_asset=self.asset_id.value,
     //     asset_receiver=Txn.sender,
@@ -876,28 +1049,28 @@ submit_claim_after_if_else@3:
     //     fee=0,
     // ).submit()
     itxn_begin
-    // contracts/recourse/contract.py:283
+    // contracts/recourse/contract.py:350
     // xfer_asset=self.asset_id.value,
     intc_0 // 0
     bytec_1 // "asset_id"
     app_global_get_ex
     assert // check self.asset_id exists
-    // contracts/recourse/contract.py:284
+    // contracts/recourse/contract.py:351
     // asset_receiver=Txn.sender,
     txn Sender
     dig 6
     itxn_field AssetAmount
     itxn_field AssetReceiver
     itxn_field XferAsset
-    // contracts/recourse/contract.py:282
+    // contracts/recourse/contract.py:349
     // itxn.AssetTransfer(
     pushint 4 // axfer
     itxn_field TypeEnum
-    // contracts/recourse/contract.py:286
+    // contracts/recourse/contract.py:353
     // fee=0,
     intc_0 // 0
     itxn_field Fee
-    // contracts/recourse/contract.py:282-287
+    // contracts/recourse/contract.py:349-354
     // itxn.AssetTransfer(
     //     xfer_asset=self.asset_id.value,
     //     asset_receiver=Txn.sender,
@@ -907,11 +1080,11 @@ submit_claim_after_if_else@3:
     itxn_submit
 
 submit_claim_after_if_else@6:
-    // contracts/recourse/contract.py:289
+    // contracts/recourse/contract.py:356
     // if penalty > 0:
     dig 5
     bz submit_claim_after_if_else@9
-    // contracts/recourse/contract.py:290-295
+    // contracts/recourse/contract.py:357-362
     // itxn.AssetTransfer(
     //     xfer_asset=self.asset_id.value,
     //     asset_receiver=self.treasury.value,
@@ -919,31 +1092,31 @@ submit_claim_after_if_else@6:
     //     fee=0,
     // ).submit()
     itxn_begin
-    // contracts/recourse/contract.py:291
+    // contracts/recourse/contract.py:358
     // xfer_asset=self.asset_id.value,
     intc_0 // 0
     bytec_1 // "asset_id"
     app_global_get_ex
     assert // check self.asset_id exists
-    // contracts/recourse/contract.py:292
+    // contracts/recourse/contract.py:359
     // asset_receiver=self.treasury.value,
     intc_0 // 0
-    bytec 4 // "treasury"
+    bytec 5 // "treasury"
     app_global_get_ex
     assert // check self.treasury exists
     dig 7
     itxn_field AssetAmount
     itxn_field AssetReceiver
     itxn_field XferAsset
-    // contracts/recourse/contract.py:290
+    // contracts/recourse/contract.py:357
     // itxn.AssetTransfer(
     pushint 4 // axfer
     itxn_field TypeEnum
-    // contracts/recourse/contract.py:294
+    // contracts/recourse/contract.py:361
     // fee=0,
     intc_0 // 0
     itxn_field Fee
-    // contracts/recourse/contract.py:290-295
+    // contracts/recourse/contract.py:357-362
     // itxn.AssetTransfer(
     //     xfer_asset=self.asset_id.value,
     //     asset_receiver=self.treasury.value,
@@ -953,10 +1126,10 @@ submit_claim_after_if_else@6:
     itxn_submit
 
 submit_claim_after_if_else@9:
-    // contracts/recourse/contract.py:297
+    // contracts/recourse/contract.py:364
     // p.bond_micro = arc4.UInt64(p.bond_micro.native - total)
     dup
-    pushint 88
+    intc_2 // 88
     extract_uint64
     dig 4
     dup
@@ -964,7 +1137,7 @@ submit_claim_after_if_else@9:
     -
     itob
     replace2 88
-    // contracts/recourse/contract.py:298
+    // contracts/recourse/contract.py:365
     // p.claim_count = arc4.UInt64(p.claim_count.native + 1)
     dup
     pushint 104
@@ -973,7 +1146,7 @@ submit_claim_after_if_else@9:
     +
     itob
     replace2 104
-    // contracts/recourse/contract.py:299
+    // contracts/recourse/contract.py:366
     // p.slashed_micro = arc4.UInt64(p.slashed_micro.native + total)
     dup
     pushint 112
@@ -983,31 +1156,31 @@ submit_claim_after_if_else@9:
     itob
     replace2 112
     dup
-    // contracts/recourse/contract.py:300
+    // contracts/recourse/contract.py:367
     // if p.bond_micro.native == 0:
-    pushint 88
+    intc_2 // 88
     extract_uint64
     bnz submit_claim_after_if_else@11
-    // contracts/recourse/contract.py:301
+    // contracts/recourse/contract.py:368
     // p.active = arc4.Bool(False)  # noqa: FBT003
-    intc 4 // 960
+    intc 4 // 1024
     intc_0 // 0
     setbit
 
 submit_claim_after_if_else@11:
-    // contracts/recourse/contract.py:302
+    // contracts/recourse/contract.py:369
     // self.providers[provider] = p.copy()
     dig 8
     dig 1
     box_put
-    // contracts/recourse/contract.py:304
+    // contracts/recourse/contract.py:371
     // self.claims[request_id] = Global.latest_timestamp
     global LatestTimestamp
     itob
     dig 8
     swap
     box_put
-    // contracts/recourse/contract.py:305
+    // contracts/recourse/contract.py:372
     // self.claim_count.value += 1
     intc_0 // 0
     bytec 6 // "claims"
@@ -1018,7 +1191,7 @@ submit_claim_after_if_else@11:
     bytec 6 // "claims"
     swap
     app_global_put
-    // contracts/recourse/contract.py:306
+    // contracts/recourse/contract.py:373
     // self.total_slashed.value += total
     intc_0 // 0
     bytec 7 // "slashed"
@@ -1031,7 +1204,7 @@ submit_claim_after_if_else@11:
     bytec 7 // "slashed"
     swap
     app_global_put
-    // contracts/recourse/contract.py:307
+    // contracts/recourse/contract.py:374
     // self.total_bonded.value -= total
     intc_0 // 0
     bytec_2 // "bonded"
@@ -1042,26 +1215,26 @@ submit_claim_after_if_else@11:
     bytec_2 // "bonded"
     swap
     app_global_put
-    // contracts/recourse/contract.py:312
+    // contracts/recourse/contract.py:379
     // payer=arc4.Address(Txn.sender),
     txn Sender
-    // contracts/recourse/contract.py:314
+    // contracts/recourse/contract.py:381
     // age_seconds=arc4.UInt64(age),
     dig 7
     itob
-    // contracts/recourse/contract.py:315
+    // contracts/recourse/contract.py:382
     // refund_micro=arc4.UInt64(refund),
     dig 6
     itob
-    // contracts/recourse/contract.py:316
+    // contracts/recourse/contract.py:383
     // penalty_micro=arc4.UInt64(penalty),
     dig 8
     itob
-    // contracts/recourse/contract.py:317
+    // contracts/recourse/contract.py:384
     // bond_remaining=p.bond_micro,
     uncover 4
     extract 88 8
-    // contracts/recourse/contract.py:310-318
+    // contracts/recourse/contract.py:377-385
     // ClaimUpheld(
     //     provider=arc4.Address(provider),
     //     payer=arc4.Address(Txn.sender),
@@ -1084,7 +1257,7 @@ submit_claim_after_if_else@11:
     concat
     swap
     concat
-    // contracts/recourse/contract.py:309-319
+    // contracts/recourse/contract.py:376-386
     // arc4.emit(
     //     ClaimUpheld(
     //         provider=arc4.Address(provider),
@@ -1100,7 +1273,7 @@ submit_claim_after_if_else@11:
     swap
     concat
     log
-    // contracts/recourse/contract.py:223
+    // contracts/recourse/contract.py:284
     // @arc4.abimethod
     bytec_3 // 0x151f7c75
     swap
@@ -1111,13 +1284,13 @@ submit_claim_after_if_else@11:
 
 submit_claim_if_body@2:
     bury 1
-    // contracts/recourse/contract.py:277
+    // contracts/recourse/contract.py:344
     // penalty = UInt64(0)
     intc_0 // 0
     bury 6
-    // contracts/recourse/contract.py:279
+    // contracts/recourse/contract.py:346
     // p.active = arc4.Bool(False)  # noqa: FBT003
-    intc 4 // 960
+    intc 4 // 1024
     intc_0 // 0
     setbit
     dig 4
@@ -1127,32 +1300,32 @@ submit_claim_if_body@2:
 
 // contract.Recourse.record_success[routing]() -> void:
 record_success:
-    // contracts/recourse/contract.py:322
+    // contracts/recourse/contract.py:389
     // @arc4.abimethod
     txna ApplicationArgs 1
     dup
     len
-    intc_2 // 32
+    intc_3 // 32
     ==
     assert // invalid number of bytes for arc4.static_array<arc4.uint8, 32>
     txna ApplicationArgs 2
     dup
     len
-    intc_3 // 8
+    pushint 8
     ==
     assert // invalid number of bytes for arc4.uint64
     btoi
-    // contracts/recourse/contract.py:332
+    // contracts/recourse/contract.py:399
     // assert Txn.sender == Global.creator_address, "creator only"
     txn Sender
     global CreatorAddress
     ==
     assert // creator only
-    // contracts/recourse/contract.py:333
+    // contracts/recourse/contract.py:400
     // assert count > 0, "count must be positive"
     dup
     assert // count must be positive
-    // contracts/recourse/contract.py:334
+    // contracts/recourse/contract.py:401
     // p = self.providers[provider].copy()
     bytec_0 // 0x705f
     uncover 2
@@ -1160,7 +1333,7 @@ record_success:
     dup
     box_get
     assert // check self.providers entry exists
-    // contracts/recourse/contract.py:335
+    // contracts/recourse/contract.py:402
     // p.success_count = arc4.UInt64(p.success_count.native + count)
     dup
     pushint 96
@@ -1171,17 +1344,17 @@ record_success:
     swap
     dig 1
     replace2 96
-    // contracts/recourse/contract.py:335-336
+    // contracts/recourse/contract.py:402-403
     // p.success_count = arc4.UInt64(p.success_count.native + count)
     // self.providers[provider] = p.copy()
     uncover 2
     pushint 96
     uncover 3
     box_replace // on error: index out of bounds
-    // contracts/recourse/contract.py:337
+    // contracts/recourse/contract.py:404
     // return p.success_count.native
     extract 96 8
-    // contracts/recourse/contract.py:322
+    // contracts/recourse/contract.py:389
     // @arc4.abimethod
     bytec_3 // 0x151f7c75
     swap
@@ -1191,24 +1364,182 @@ record_success:
     return
 
 
+// contract.Recourse.prune_claim[routing]() -> void:
+prune_claim:
+    // contracts/recourse/contract.py:406
+    // @arc4.abimethod
+    txna ApplicationArgs 1
+    dup
+    intc_0 // 0
+    extract_uint16 // on error: invalid array length header
+    pushint 2
+    +
+    dig 1
+    len
+    ==
+    assert // invalid number of bytes for arc4.dynamic_array<arc4.uint8>
+    extract 2 0
+    // contracts/recourse/contract.py:416
+    // assert request_id in self.claims, "unknown claim"
+    bytec 8 // 0x635f
+    swap
+    concat
+    dup
+    box_len
+    bury 1
+    assert // unknown claim
+    // contracts/recourse/contract.py:417
+    // claimed_at = self.claims[request_id]
+    dup
+    box_get
+    pop
+    btoi
+    // contracts/recourse/contract.py:419
+    // Global.latest_timestamp > claimed_at + MAX_CLAIM_AGE_SECONDS
+    global LatestTimestamp
+    swap
+    intc 5 // 86400
+    +
+    >
+    // contracts/recourse/contract.py:418-420
+    // assert (
+    //     Global.latest_timestamp > claimed_at + MAX_CLAIM_AGE_SECONDS
+    // ), "still within the dispute window"
+    assert // still within the dispute window
+    // contracts/recourse/contract.py:421
+    // del self.claims[request_id]
+    box_del
+    pop
+    // contracts/recourse/contract.py:406
+    // @arc4.abimethod
+    intc_1 // 1
+    return
+
+
+// contract.Recourse.destroy[routing]() -> void:
+destroy:
+    // contracts/recourse/contract.py:436
+    // assert Txn.sender == Global.creator_address, "creator only"
+    txn Sender
+    global CreatorAddress
+    ==
+    assert // creator only
+    // contracts/recourse/contract.py:437
+    // assert self.total_bonded.value == 0, "bonds are still held"
+    intc_0 // 0
+    bytec_2 // "bonded"
+    app_global_get_ex
+    assert // check self.total_bonded exists
+    !
+    assert // bonds are still held
+    // contracts/recourse/contract.py:439-446
+    // # Return custody of the bond asset, then the remaining ALGO.
+    // itxn.AssetTransfer(
+    //     xfer_asset=self.asset_id.value,
+    //     asset_receiver=Global.creator_address,
+    //     asset_amount=0,
+    //     asset_close_to=Global.creator_address,
+    //     fee=0,
+    // ).submit()
+    itxn_begin
+    // contracts/recourse/contract.py:441
+    // xfer_asset=self.asset_id.value,
+    intc_0 // 0
+    bytec_1 // "asset_id"
+    app_global_get_ex
+    assert // check self.asset_id exists
+    // contracts/recourse/contract.py:442
+    // asset_receiver=Global.creator_address,
+    global CreatorAddress
+    // contracts/recourse/contract.py:444
+    // asset_close_to=Global.creator_address,
+    dup
+    itxn_field AssetCloseTo
+    // contracts/recourse/contract.py:443
+    // asset_amount=0,
+    intc_0 // 0
+    itxn_field AssetAmount
+    itxn_field AssetReceiver
+    itxn_field XferAsset
+    // contracts/recourse/contract.py:439-440
+    // # Return custody of the bond asset, then the remaining ALGO.
+    // itxn.AssetTransfer(
+    pushint 4 // axfer
+    itxn_field TypeEnum
+    // contracts/recourse/contract.py:445
+    // fee=0,
+    intc_0 // 0
+    itxn_field Fee
+    // contracts/recourse/contract.py:439-446
+    // # Return custody of the bond asset, then the remaining ALGO.
+    // itxn.AssetTransfer(
+    //     xfer_asset=self.asset_id.value,
+    //     asset_receiver=Global.creator_address,
+    //     asset_amount=0,
+    //     asset_close_to=Global.creator_address,
+    //     fee=0,
+    // ).submit()
+    itxn_submit
+    // contracts/recourse/contract.py:447-452
+    // itxn.Payment(
+    //     receiver=Global.creator_address,
+    //     amount=0,
+    //     close_remainder_to=Global.creator_address,
+    //     fee=0,
+    // ).submit()
+    itxn_begin
+    // contracts/recourse/contract.py:448
+    // receiver=Global.creator_address,
+    global CreatorAddress
+    // contracts/recourse/contract.py:450
+    // close_remainder_to=Global.creator_address,
+    dup
+    itxn_field CloseRemainderTo
+    // contracts/recourse/contract.py:449
+    // amount=0,
+    intc_0 // 0
+    itxn_field Amount
+    itxn_field Receiver
+    // contracts/recourse/contract.py:447
+    // itxn.Payment(
+    intc_1 // pay
+    itxn_field TypeEnum
+    // contracts/recourse/contract.py:451
+    // fee=0,
+    intc_0 // 0
+    itxn_field Fee
+    // contracts/recourse/contract.py:447-452
+    // itxn.Payment(
+    //     receiver=Global.creator_address,
+    //     amount=0,
+    //     close_remainder_to=Global.creator_address,
+    //     fee=0,
+    // ).submit()
+    itxn_submit
+    // contracts/recourse/contract.py:423
+    // @arc4.abimethod(allow_actions=["DeleteApplication"])
+    intc_1 // 1
+    return
+
+
 // contract.Recourse.read_provider[routing]() -> void:
 read_provider:
-    // contracts/recourse/contract.py:341
+    // contracts/recourse/contract.py:456
     // @arc4.abimethod(readonly=True)
     txna ApplicationArgs 1
     dup
     len
-    intc_2 // 32
+    intc_3 // 32
     ==
     assert // invalid number of bytes for arc4.static_array<arc4.uint8, 32>
-    // contracts/recourse/contract.py:343
+    // contracts/recourse/contract.py:458
     // return self.providers[provider]
     bytec_0 // 0x705f
     swap
     concat
     box_get
     assert // check self.providers entry exists
-    // contracts/recourse/contract.py:341
+    // contracts/recourse/contract.py:456
     // @arc4.abimethod(readonly=True)
     bytec_3 // 0x151f7c75
     swap
@@ -1220,7 +1551,7 @@ read_provider:
 
 // contract.Recourse.is_claimed[routing]() -> void:
 is_claimed:
-    // contracts/recourse/contract.py:345
+    // contracts/recourse/contract.py:460
     // @arc4.abimethod(readonly=True)
     txna ApplicationArgs 1
     dup
@@ -1233,14 +1564,14 @@ is_claimed:
     ==
     assert // invalid number of bytes for arc4.dynamic_array<arc4.uint8>
     extract 2 0
-    // contracts/recourse/contract.py:347
+    // contracts/recourse/contract.py:462
     // return request_id in self.claims
-    bytec 9 // 0x635f
+    bytec 8 // 0x635f
     swap
     concat
     box_len
     bury 1
-    // contracts/recourse/contract.py:345
+    // contracts/recourse/contract.py:460
     // @arc4.abimethod(readonly=True)
     pushbytes 0x00
     intc_0 // 0

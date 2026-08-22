@@ -114,10 +114,15 @@ export function computeScore(agg: SampleAggregate): Score {
 
   const reliability = agg.samples === 0 ? 0 : base * claimPenalty;
 
-  const { lower, upper } = wilsonInterval(agg.passes, agg.samples);
+  // Same basis as the weighted rates above: weighted successes over the Kish
+  // effective sample size. Feeding raw counts here while the composite used
+  // recency-weighted rates put two different denominators side by side under
+  // labels that implied one.
+  const n = agg.effectiveSamples;
+  const { lower, upper } = wilsonInterval(agg.weightedPassRate * n, n);
   // Proven violations pull the bound down too — they are facts, not estimates.
   const lowerBound = agg.samples === 0 ? 0 : lower * claimPenalty;
-  const confidence = confidenceFor(agg.samples, upper - lower);
+  const confidence = confidenceFor(agg.effectiveSamples, upper - lower);
 
   return {
     reliability: round4(reliability),

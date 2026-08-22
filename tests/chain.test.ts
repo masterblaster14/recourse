@@ -10,12 +10,13 @@ import { claimBoxName, decodeProvider, providerBoxName, spec } from "../src/lib/
 
 const ADDR = algosdk.generateAccount().addr.toString();
 
-/** Build a 121-byte ARC-4 Provider struct by hand. */
+/** Build a 129-byte ARC-4 Provider struct by hand. */
 function encodeProvider(v: {
   pubkey?: Buffer; slaHash?: Buffer; price?: number; staleness?: number; latency?: number;
-  bond?: number; success?: number; claims?: number; slashed?: number; active?: boolean;
+  bond?: number; success?: number; claims?: number; slashed?: number;
+  unbondAt?: number; active?: boolean;
 }): Uint8Array {
-  const b = Buffer.alloc(121);
+  const b = Buffer.alloc(129);
   (v.pubkey ?? Buffer.alloc(32, 0xaa)).copy(b, 0);
   (v.slaHash ?? Buffer.alloc(32, 0xbb)).copy(b, 32);
   b.writeBigUInt64BE(BigInt(v.price ?? 1000), 64);
@@ -25,8 +26,9 @@ function encodeProvider(v: {
   b.writeBigUInt64BE(BigInt(v.success ?? 7), 96);
   b.writeBigUInt64BE(BigInt(v.claims ?? 3), 104);
   b.writeBigUInt64BE(BigInt(v.slashed ?? 30_000), 112);
+  b.writeBigUInt64BE(BigInt(v.unbondAt ?? 0), 120);
   // ARC-4 packs a trailing bool into one byte, value in the high bit.
-  b[120] = (v.active ?? true) ? 0x80 : 0x00;
+  b[128] = (v.active ?? true) ? 0x80 : 0x00;
   return new Uint8Array(b);
 }
 
@@ -43,7 +45,14 @@ describe("decodeProvider", () => {
     assert.equal(p.successCount, 7);
     assert.equal(p.claimCount, 3);
     assert.equal(p.slashedMicro, 30_000);
+    assert.equal(p.unbondAt, 0);
     assert.equal(p.active, true);
+  });
+
+  test("reads a pending unbond deadline", () => {
+    const p = decodeProvider(ADDR, encodeProvider({ unbondAt: 1_800_000_000, active: false }));
+    assert.equal(p.unbondAt, 1_800_000_000);
+    assert.equal(p.active, false);
   });
 
   test("decodes the ARC-4 bool from the high bit, not from truthiness", () => {
@@ -59,7 +68,7 @@ describe("decodeProvider", () => {
   });
 
   test("refuses a short box rather than returning silent nonsense", () => {
-    assert.throws(() => decodeProvider(ADDR, new Uint8Array(120)), /too short/);
+    assert.throws(() => decodeProvider(ADDR, new Uint8Array(128)), /too short/);
   });
 });
 
@@ -95,8 +104,9 @@ describe("compiled app spec", () => {
   test("exposes every method the client calls", () => {
     const names = s.methods.map(m => m.name);
     for (const m of [
-      "create", "opt_in_asset", "register", "deposit_bond", "withdraw_bond",
-      "submit_claim", "record_success", "read_provider", "is_claimed", "noop",
+      "create", "opt_in_asset", "register", "deposit_bond", "request_unbond",
+      "withdraw_bond", "deregister", "submit_claim", "record_success",
+      "prune_claim", "read_provider", "is_claimed", "noop",
     ]) {
       assert.ok(names.includes(m), `missing ABI method: ${m}`);
     }
@@ -108,9 +118,16 @@ describe("compiled app spec", () => {
     assert.equal(m.returns.type, "uint64");
   });
 
-  test("Provider decodes to the 121-byte layout this module assumes", () => {
+  test("Provider decodes to the 129-byte layout this module assumes", () => {
     const m = s.methods.find(x => x.name === "read_provider")!;
-    assert.equal(m.returns.type, "(byte[32],byte[32],uint64,uint64,uint64,uint64,uint64,uint64,uint64,bool)");
+    assert.equal(m.returns.type, "(byte[32],byte[32],uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,bool)");
+  });
+
+  test("unstaking is a two-step lifecycle, so a claim cannot be outrun", () => {
+    const names = s.methods.map(m => m.name);
+    assert.ok(names.includes("request_unbond"), "no way to start the cooldown");
+    const w = s.methods.find(x => x.name === "withdraw_bond")!;
+    assert.deepEqual(w.args.map(a => a.type), ["uint64"]);
   });
 
   test("carries embedded TEAL so deployment needs no local compiler", () => {

@@ -22,8 +22,21 @@ import {
 import { record, resetProof } from "../lib/proof.ts";
 import { bar, head, info, ok, setEnvValue } from "./_envfile.ts";
 
-/** MBR base + ~30 boxes + payout headroom. TestNet ALGO is free; do not be clever. */
-const APP_FUNDING_MICROALGO = 1_500_000;
+/**
+ * What the application account actually needs, rather than a round number.
+ *
+ *   base account MBR            0.100
+ *   2 provider boxes @ 0.0645   0.129
+ *   ~30 claim boxes @ 0.0193    0.579  (bounded now that claims can be pruned)
+ *   inner-transaction headroom  0.092
+ *                               -----
+ *                               0.900
+ *
+ * Over-funding is not free: every redeploy strands whatever is left in the old
+ * application account, and the creator's per-app minimum balance is locked for
+ * good. `destroy` reclaims both, but only for apps deployed with it.
+ */
+const APP_FUNDING_MICROALGO = 900_000;
 
 async function main(): Promise<void> {
   const force = process.argv.includes("--force");

@@ -2,22 +2,31 @@
  * Adversarial check against the deployed contract.
  *
  * The happy path is easy to demo and proves very little. What matters is that
- * the guarantees hold when someone tries to abuse them, so this buys real
- * responses and then attempts four claims that MUST be rejected on chain:
+ * the guarantees hold when someone tries to abuse them. Every attempt below
+ * MUST be rejected by the deployed contract:
  *
- *   1. a fresh response          -> "within SLA", nothing was breached
- *   2. a tampered signature      -> "bad signature", the provider did not sign it
- *   3. a tampered timestamp      -> "bad signature", the signature covers the timestamp
- *   4. a replay of a real claim  -> "already claimed", one response pays once
+ *   1. claiming a fresh response        nothing was breached
+ *   2. a tampered signature             the provider did not sign that
+ *   3. a tampered timestamp             the signature covers the timestamp
+ *   4. rotating the signing key         the escape hatch that voided all claims
+ *   5. widening the staleness bound     the quieter version of the same escape
+ *   6. withdrawing without a cooldown   collateral cannot outrun a claim
+ *   7. replaying an upheld claim        one response pays out once
  *
- * Then one claim that must succeed, so a passing run also proves the rejections
- * are not just the contract being broken.
+ * Plus one claim that MUST succeed, so a passing run also proves the rejections
+ * are the guards working rather than the contract being broken.
+ *
+ * 4 and 5 are checked against on-chain STATE, not error text: TEAL assert
+ * messages do not survive to the client, so "it threw" is not evidence. The
+ * test reads the pubkey back and fails if it moved.
  *
  *   npm run verify:guards
  */
+import algosdk from "algosdk";
+
 import { env, fromMicro, txUrl } from "../env.ts";
-import { readProvider } from "../lib/chain.ts";
-import { providerByVariant } from "../lib/providers.ts";
+import { readProvider, registerProvider, withdrawBond } from "../lib/chain.ts";
+import { providerAccount, providerByVariant, slaHashFor } from "../lib/providers.ts";
 import { agentClient, type SignedResponse } from "../lib/recourse-client.ts";
 import { bad, bar, head, info, ok } from "./_envfile.ts";
 
@@ -110,6 +119,51 @@ async function main(): Promise<void> {
     bad("genuine violation was rejected", String((err as Error).message).slice(0, 200));
     failed++;
   }
+
+  head("a bonded provider cannot rewrite the terms it is bonded against");
+  // The sharpest attack on the whole design: serve stale signed responses, then
+  // rotate the signing key so every outstanding signature stops verifying and
+  // every claim becomes unfileable. Verified by STATE rather than by error
+  // text, because TEAL assert messages do not survive to the client.
+  const staleAccount = providerAccount(stale);
+  const beforeKey = (await readProvider(env.appId, stale.address))!.pubkey;
+  const foreignKey = Buffer.from(algosdk.generateAccount().addr.publicKey);
+
+  await mustReject("rotate signing key while bonded", /assert|unbond before/i, () =>
+    registerProvider(staleAccount, {
+      appId: env.appId,
+      pubkey: foreignKey,
+      slaHash: slaHashFor(stale),
+      priceMicro: env.priceMicro,
+      maxStaleness: env.maxStalenessS,
+      maxLatencyMs: env.maxLatencyMs,
+    }),
+  );
+
+  await mustReject("widen the staleness bound while bonded", /assert|unbond before/i, () =>
+    registerProvider(staleAccount, {
+      appId: env.appId,
+      pubkey: stale.pubkey,
+      slaHash: slaHashFor(stale),
+      priceMicro: env.priceMicro,
+      maxStaleness: 999_999,
+      maxLatencyMs: env.maxLatencyMs,
+    }),
+  );
+
+  const afterKey = (await readProvider(env.appId, stale.address))!.pubkey;
+  if (Buffer.compare(beforeKey, afterKey) === 0) {
+    ok("signing key on chain is unchanged", "outstanding signatures still verify");
+    passed++;
+  } else {
+    bad("SIGNING KEY WAS ROTATED", "every pending claim against this provider is now void");
+    failed++;
+  }
+
+  head("collateral cannot outrun a claim");
+  await mustReject("withdraw without starting the cooldown", /assert|request_unbond/i, () =>
+    withdrawBond(staleAccount, { appId: env.appId, assetId: env.assetId, amountMicro: 1000 }),
+  );
 
   head("replay guard");
   if (realClaimTx) {

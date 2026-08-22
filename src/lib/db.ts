@@ -54,8 +54,21 @@ export type PaymentRow = {
 
 export type SampleAggregate = {
   samples: number;
-  /** Samples where every check passed. The basis for the confidence interval. */
+  /** Samples where every check passed. */
   passes: number;
+  /**
+   * Kish effective sample size under the recency weighting.
+   *
+   * Recency-weighted rates and a binomial confidence interval have to be
+   * computed on the same basis or they describe different things while being
+   * displayed side by side. Weighted counts are not integer trials, so the
+   * honest input to Wilson is the effective n — (Sum w)^2 / Sum w^2 — which
+   * equals the raw count when every weight is equal and shrinks as the
+   * weighting concentrates on fewer samples.
+   */
+  effectiveSamples: number;
+  /** Recency-weighted all-checks-passed rate, on the same basis as the above. */
+  weightedPassRate: number;
   recentSamples: number;
   schemaPassRate: number;
   stalenessPassRate: number;
@@ -153,6 +166,8 @@ function aggregateFromRows(rows: SampleRow[], upheldClaims: number): SampleAggre
   let wStale = 0;
   let wLatency = 0;
   let wSig = 0;
+  let wPass = 0;
+  let wSquared = 0;
   let recent = 0;
   let passes = 0;
   const latencies: number[] = [];
@@ -160,19 +175,26 @@ function aggregateFromRows(rows: SampleRow[], upheldClaims: number): SampleAggre
   for (const r of rows) {
     const w = weightFor(r.ts, now);
     wTotal += w;
+    wSquared += w * w;
     if (r.schema_ok) wSchema += w;
     if (r.staleness_ok) wStale += w;
     if (r.latency_ok) wLatency += w;
     if (r.sig_ok) wSig += w;
-    if (r.schema_ok && r.staleness_ok && r.latency_ok && r.sig_ok) passes++;
+    if (r.schema_ok && r.staleness_ok && r.latency_ok && r.sig_ok) {
+      passes++;
+      wPass += w;
+    }
     if (now - r.ts.getTime() <= RECENT_WINDOW_MS) recent++;
     latencies.push(r.latency_ms);
   }
 
   const rate = (n: number) => (wTotal === 0 ? 0 : n / wTotal);
+  const effectiveSamples = wSquared === 0 ? 0 : (wTotal * wTotal) / wSquared;
   return {
     samples: rows.length,
     passes,
+    effectiveSamples,
+    weightedPassRate: rate(wPass),
     recentSamples: recent,
     schemaPassRate: rate(wSchema),
     stalenessPassRate: rate(wStale),

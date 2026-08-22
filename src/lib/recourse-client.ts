@@ -33,6 +33,12 @@ export type SignedResponse = {
 
 export type VerifyOutcome = {
   pass: boolean;
+  /**
+   * Whether this outcome says anything about the provider at all. False when
+   * the payment layer failed, in which case the sample must be discarded
+   * rather than counted against the provider's reliability.
+   */
+  attributable: boolean;
   checks: CheckResult[];
   /** True only when the provider's own signature proves an SLA breach. */
   provableViolation: boolean;
@@ -54,6 +60,12 @@ export type BuyResult = {
   totalMs: number;
   body: SignedResponse | null;
   settlement: { transaction: string; payer?: string; success: boolean } | null;
+  /**
+   * True when the x402 exchange itself never completed — the client could not
+   * build a payment, or the facilitator failed to settle. The provider never
+   * got the chance to answer, so nothing here is attributable to it.
+   */
+  paymentFailed: boolean;
   error?: string;
 };
 
@@ -171,7 +183,11 @@ export class RecourseClient {
         }
       }
 
-      return { ok: res.ok, status: res.status, latencyMs, totalMs, body, settlement };
+      return {
+        ok: res.ok, status: res.status, latencyMs, totalMs, body, settlement,
+        // A 402 that came back a second time means payment did not take.
+        paymentFailed: !res.ok && res.status === 402,
+      };
     } catch (err) {
       const totalMs = Date.now() - started;
       return {
@@ -181,6 +197,9 @@ export class RecourseClient {
         totalMs,
         body: null,
         settlement: null,
+        // wrapFetchWithPayment throws only on the payment path: it could not
+        // create a payload, or settlement failed. Never the provider's fault.
+        paymentFailed: true,
         error: String((err as Error)?.message ?? err),
       };
     }
@@ -299,6 +318,7 @@ export class RecourseClient {
     const pass = checks.every(c => c.pass);
     return {
       pass,
+      attributable: !result.paymentFailed,
       checks,
       // Signed, and the signed timestamp breaches the provider's own bound.
       provableViolation: sigOk && !stalenessOk && schemaOk,

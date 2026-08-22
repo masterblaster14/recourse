@@ -41,12 +41,24 @@ from algopy import (
 Bytes32: typing.TypeAlias = arc4.StaticArray[arc4.Byte, typing.Literal[32]]
 
 # A slash is 9x the price of the call on top of the full refund. Cheating on a
-# single call therefore costs the provider 10x what it earned from it.
+# single call therefore costs the provider 10x what it earned from it, so
+# serving a knowingly bad response is never profitable at any volume.
 PENALTY_MULTIPLIER = 9
+
+# Unstaking is delayed so a provider cannot watch a bad response go out and
+# then race the claim by pulling its collateral. The provider is delisted the
+# instant it asks to unbond, but stays claimable for the whole window.
+# Production would use hours; this is sized so a demo can show the mechanism.
+UNBOND_DELAY_SECONDS = 300
+
+# A response has to be disputed while it still matters. Bounding it also bounds
+# the replay-guard state: once a claim record is older than this it can never
+# gate anything again, so its box can be reclaimed.
+MAX_CLAIM_AGE_SECONDS = 86400
 
 
 class Provider(arc4.Struct):
-    """Per-provider record. Fixed size (121 bytes) so it decodes cheaply off chain."""
+    """Per-provider record. Fixed size (129 bytes) so it decodes cheaply off chain."""
 
     pubkey: Bytes32  # ed25519 key the provider signs responses with
     sla_hash: Bytes32  # sha256 of the published SLA document
@@ -57,6 +69,7 @@ class Provider(arc4.Struct):
     success_count: arc4.UInt64
     claim_count: arc4.UInt64
     slashed_micro: arc4.UInt64  # cumulative refund + penalty paid out
+    unbond_at: arc4.UInt64  # 0 = bonded; otherwise when withdrawal unlocks
     active: arc4.Bool
 
 
@@ -150,10 +163,22 @@ class Recourse(ARC4Contract):
                 success_count=arc4.UInt64(0),
                 claim_count=arc4.UInt64(0),
                 slashed_micro=arc4.UInt64(0),
+                unbond_at=arc4.UInt64(0),
                 active=arc4.Bool(True),  # noqa: FBT003
             )
         else:
-            # Re-publishing an SLA keeps the accumulated history and bond.
+            # A bonded provider may NOT restate its terms.
+            #
+            # Without this a provider could serve a batch of stale, signed
+            # responses and then rotate `pubkey` for a couple of thousand
+            # microAlgos: every outstanding signature would stop verifying and
+            # every claim against it would become unfileable. Raising
+            # `max_staleness` achieves the same thing more quietly. Your
+            # commitment is frozen for exactly as long as your collateral is
+            # backing it — to change terms, unbond and re-register.
+            assert self.providers[Txn.sender].bond_micro.native == 0, (
+                "unbond before changing your published terms"
+            )
             p = self.providers[Txn.sender].copy()
             p.pubkey = pubkey.copy()
             p.sla_hash = sla_hash.copy()
@@ -182,6 +207,8 @@ class Recourse(ARC4Contract):
 
         p = self.providers[Txn.sender].copy()
         p.bond_micro = arc4.UInt64(p.bond_micro.native + axfer.asset_amount)
+        # Adding collateral cancels any pending exit and relists the provider.
+        p.unbond_at = arc4.UInt64(0)
         p.active = arc4.Bool(True)  # noqa: FBT003
         self.providers[Txn.sender] = p.copy()
 
@@ -197,12 +224,33 @@ class Recourse(ARC4Contract):
         return p.bond_micro.native
 
     @arc4.abimethod
+    def request_unbond(self) -> UInt64:
+        """
+        Begin unstaking. Delists the provider immediately, but leaves the bond
+        claimable for the whole cooldown.
+
+        This is the half that matters: a provider watching a bad response go
+        out cannot simply pull its collateral before the claim lands, because
+        withdrawal does not unlock until the window has elapsed and claims keep
+        working throughout.
+        """
+        assert Txn.sender in self.providers, "not registered"
+        p = self.providers[Txn.sender].copy()
+        assert p.bond_micro.native > 0, "nothing bonded"
+        p.unbond_at = arc4.UInt64(Global.latest_timestamp + UNBOND_DELAY_SECONDS)
+        p.active = arc4.Bool(False)  # noqa: FBT003
+        self.providers[Txn.sender] = p.copy()
+        return p.unbond_at.native
+
+    @arc4.abimethod
     def withdraw_bond(self, amount: UInt64) -> UInt64:
-        """A provider may unstake at any time. Unstaking is itself a signal."""
+        """Unstake, once the cooldown started by request_unbond has elapsed."""
         assert Txn.sender in self.providers, "not registered"
         p = self.providers[Txn.sender].copy()
         assert amount > 0, "nothing to withdraw"
         assert amount <= p.bond_micro.native, "insufficient bond"
+        assert p.unbond_at.native > 0, "call request_unbond first"
+        assert Global.latest_timestamp >= p.unbond_at.native, "cooldown has not elapsed"
 
         itxn.AssetTransfer(
             xfer_asset=self.asset_id.value,
@@ -217,6 +265,19 @@ class Recourse(ARC4Contract):
         self.providers[Txn.sender] = p.copy()
         self.total_bonded.value -= amount
         return p.bond_micro.native
+
+    @arc4.abimethod
+    def deregister(self) -> None:
+        """
+        Leave the registry and reclaim the box minimum balance.
+
+        Only once the bond is fully withdrawn, so this can never be a shortcut
+        past a pending claim.
+        """
+        assert Txn.sender in self.providers, "not registered"
+        assert self.providers[Txn.sender].bond_micro.native == 0, "withdraw the bond first"
+        del self.providers[Txn.sender]
+        self.provider_count.value -= 1
 
     # ------------------------------------------------------------------ claim
 
@@ -254,7 +315,10 @@ class Recourse(ARC4Contract):
         assert request_id not in self.claims, "already claimed"
 
         p = self.providers[provider].copy()
-        assert p.active.native, "provider inactive"
+        # Deliberately does NOT require `active`. `active` means "listed for new
+        # traffic"; it must not gate claims, or a provider could delist itself
+        # via request_unbond and become uncatchable during its own cooldown.
+        # Having collateral is the only condition that matters here.
         assert p.bond_micro.native > 0, "no bond"
 
         # 1. The provider signed this exact response with this exact timestamp.
@@ -265,6 +329,9 @@ class Recourse(ARC4Contract):
         assert Global.latest_timestamp > data_timestamp, "timestamp in the future"
         age = Global.latest_timestamp - data_timestamp
         assert age > p.max_staleness.native, "within SLA"
+        # Disputes have to be raised while they still matter. This also bounds
+        # how long the replay-guard box has to exist, so it can be reclaimed.
+        assert age < MAX_CLAIM_AGE_SECONDS, "too old to claim"
 
         # 3. Settle out of the bond.
         refund = p.price_micro.native
@@ -335,6 +402,54 @@ class Recourse(ARC4Contract):
         p.success_count = arc4.UInt64(p.success_count.native + count)
         self.providers[provider] = p.copy()
         return p.success_count.native
+
+    @arc4.abimethod
+    def prune_claim(self, request_id: Bytes) -> None:
+        """
+        Reclaim the box of a claim that can no longer gate anything.
+
+        Permissionless on purpose: the replay guard only has to hold for as
+        long as a response is disputable, and past MAX_CLAIM_AGE_SECONDS no
+        claim can succeed anyway. Without this, every claim ever filed would
+        ratchet the application's minimum balance up forever.
+        """
+        assert request_id in self.claims, "unknown claim"
+        claimed_at = self.claims[request_id]
+        assert (
+            Global.latest_timestamp > claimed_at + MAX_CLAIM_AGE_SECONDS
+        ), "still within the dispute window"
+        del self.claims[request_id]
+
+    @arc4.abimethod(allow_actions=["DeleteApplication"])
+    def destroy(self) -> None:
+        """
+        Tear the application down and return everything it holds.
+
+        Without this every redeployment strands the application account's ALGO
+        and permanently locks the creator's per-app minimum balance — during
+        development that leaked several ALGO before anyone noticed.
+
+        Refuses while any bond is still held, and the AVM refuses while any box
+        still exists, so providers must be deregistered and claims pruned
+        first. Teardown can therefore never be a way out of a live obligation.
+        """
+        assert Txn.sender == Global.creator_address, "creator only"
+        assert self.total_bonded.value == 0, "bonds are still held"
+
+        # Return custody of the bond asset, then the remaining ALGO.
+        itxn.AssetTransfer(
+            xfer_asset=self.asset_id.value,
+            asset_receiver=Global.creator_address,
+            asset_amount=0,
+            asset_close_to=Global.creator_address,
+            fee=0,
+        ).submit()
+        itxn.Payment(
+            receiver=Global.creator_address,
+            amount=0,
+            close_remainder_to=Global.creator_address,
+            fee=0,
+        ).submit()
 
     # ------------------------------------------------------------------ reads
 

@@ -357,6 +357,106 @@ export async function submitClaim(
   };
 }
 
+export async function withdrawBond(
+  provider: algosdk.Account,
+  opts: { appId: number; assetId: number; amountMicro: number },
+): Promise<string> {
+  const atc = new algosdk.AtomicTransactionComposer();
+  atc.addMethodCall({
+    appID: opts.appId,
+    method: abiMethod("withdraw_bond"),
+    methodArgs: [opts.amountMicro],
+    sender: provider.addr.toString(),
+    signer: signerFor(provider),
+    suggestedParams: await params(3000),
+    appForeignAssets: [opts.assetId],
+    boxes: [{ appIndex: opts.appId, name: providerBoxName(provider.addr.toString()) }],
+  });
+  const res = await atc.execute(algod(), 6);
+  return res.txIDs[0];
+}
+
+export async function requestUnbond(
+  provider: algosdk.Account,
+  appId: number,
+): Promise<{ txid: string; unbondAt: number }> {
+  const atc = new algosdk.AtomicTransactionComposer();
+  atc.addMethodCall({
+    appID: appId,
+    method: abiMethod("request_unbond"),
+    methodArgs: [],
+    sender: provider.addr.toString(),
+    signer: signerFor(provider),
+    suggestedParams: await params(2000),
+    boxes: [{ appIndex: appId, name: providerBoxName(provider.addr.toString()) }],
+  });
+  const res = await atc.execute(algod(), 6);
+  return { txid: res.txIDs[0], unbondAt: Number(res.methodResults[0]?.returnValue ?? 0) };
+}
+
+export async function deregisterProvider(
+  provider: algosdk.Account,
+  appId: number,
+): Promise<string> {
+  const atc = new algosdk.AtomicTransactionComposer();
+  atc.addMethodCall({
+    appID: appId,
+    method: abiMethod("deregister"),
+    methodArgs: [],
+    sender: provider.addr.toString(),
+    signer: signerFor(provider),
+    suggestedParams: await params(2000),
+    boxes: [{ appIndex: appId, name: providerBoxName(provider.addr.toString()) }],
+  });
+  const res = await atc.execute(algod(), 6);
+  return res.txIDs[0];
+}
+
+export async function pruneClaim(
+  sender: algosdk.Account,
+  appId: number,
+  requestId: Buffer,
+): Promise<string> {
+  const atc = new algosdk.AtomicTransactionComposer();
+  atc.addMethodCall({
+    appID: appId,
+    method: abiMethod("prune_claim"),
+    methodArgs: [new Uint8Array(requestId)],
+    sender: sender.addr.toString(),
+    signer: signerFor(sender),
+    suggestedParams: await params(2000),
+    boxes: [{ appIndex: appId, name: claimBoxName(requestId) }],
+  });
+  const res = await atc.execute(algod(), 6);
+  return res.txIDs[0];
+}
+
+/** Lists every box the app holds, so a teardown knows what to clear first. */
+export async function listBoxes(appId: number): Promise<Uint8Array[]> {
+  const res = await algod().getApplicationBoxes(appId).do();
+  return (res.boxes ?? []).map(b => toBytes(b.name));
+}
+
+export async function destroyApp(
+  deployer: algosdk.Account,
+  appId: number,
+  assetId: number,
+): Promise<string> {
+  const atc = new algosdk.AtomicTransactionComposer();
+  atc.addMethodCall({
+    appID: appId,
+    method: abiMethod("destroy"),
+    methodArgs: [],
+    sender: deployer.addr.toString(),
+    signer: signerFor(deployer),
+    suggestedParams: await params(4000), // outer + asset close + algo close
+    onComplete: algosdk.OnApplicationComplete.DeleteApplicationOC,
+    appForeignAssets: [assetId],
+  });
+  const res = await atc.execute(algod(), 6);
+  return res.txIDs[0];
+}
+
 export async function recordSuccess(
   deployer: algosdk.Account,
   opts: { appId: number; provider: string; count: number },
@@ -388,13 +488,15 @@ export type ProviderState = {
   successCount: number;
   claimCount: number;
   slashedMicro: number;
+  /** 0 while bonded; otherwise the unix time withdrawal unlocks. */
+  unbondAt: number;
   active: boolean;
 };
 
-/** Provider is a fixed-width ARC-4 struct: 32 + 32 + 8*7 + 1 = 121 bytes. */
+/** Provider is a fixed-width ARC-4 struct: 32 + 32 + 8*8 + 1 = 129 bytes. */
 export function decodeProvider(address: string, raw: Uint8Array): ProviderState {
   const b = Buffer.from(raw);
-  if (b.length < 121) throw new Error(`provider box too short: ${b.length} bytes`);
+  if (b.length < 129) throw new Error(`provider box too short: ${b.length} bytes`);
   const u64 = (off: number) => Number(b.readBigUInt64BE(off));
   return {
     address,
@@ -407,8 +509,9 @@ export function decodeProvider(address: string, raw: Uint8Array): ProviderState 
     successCount: u64(96),
     claimCount: u64(104),
     slashedMicro: u64(112),
+    unbondAt: u64(120),
     // ARC-4 packs a trailing bool into one byte, value in the high bit.
-    active: (b[120] & 0x80) !== 0,
+    active: (b[128] & 0x80) !== 0,
   };
 }
 

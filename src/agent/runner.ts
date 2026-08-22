@@ -235,17 +235,24 @@ export async function runDemo(opts: DemoOptions = {}): Promise<DemoSummary> {
       const { pubkey, sla } = await trustedPubkey(baseUrl, chosen.provider, chosen.sla.sla_hash);
       const outcome = client.verify(result, sla, pubkey);
 
-      await store().insertSample({
-        provider: chosen.provider,
-        ts: new Date(),
-        http_status: result.status,
-        latency_ms: result.latencyMs,
-        schema_ok: outcome.schemaOk,
-        stale_s: outcome.staleS,
-        sig_ok: outcome.sigOk,
-        staleness_ok: outcome.stalenessOk,
-        latency_ok: outcome.latencyOk,
-      });
+      if (outcome.attributable) {
+        await store().insertSample({
+          provider: chosen.provider,
+          ts: new Date(),
+          http_status: result.status,
+          latency_ms: result.latencyMs,
+          schema_ok: outcome.schemaOk,
+          stale_s: outcome.staleS,
+          sig_ok: outcome.sigOk,
+          staleness_ok: outcome.stalenessOk,
+          latency_ok: outcome.latencyOk,
+        });
+      } else {
+        // The payment layer failed, so the provider never had a turn. Counting
+        // this would let a facilitator outage tank every provider's score at
+        // once for something none of them did.
+        log("warn", `call ${i}: x402 exchange failed (${result.error ?? "no settlement"}) — sample discarded, not charged to ${chosen.label}`);
+      }
 
       if (outcome.pass) {
         summary.passed++;

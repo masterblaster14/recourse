@@ -19,6 +19,9 @@ function agg(n: number, passes = n, upheldClaims = 0): SampleAggregate {
   return {
     samples: n,
     passes,
+    // Uniform weights, so the effective size is just the raw count.
+    effectiveSamples: n,
+    weightedPassRate: n === 0 ? 0 : passes / n,
     recentSamples: n,
     schemaPassRate: n === 0 ? 0 : 1,
     stalenessPassRate: rate,
