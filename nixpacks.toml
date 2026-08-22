@@ -1,0 +1,10 @@
+# Node only. The contract build output is committed, so the deploy does not
+# need the Python/puyapy toolchain.
+[phases.setup]
+nixPkgs = ["nodejs_22"]
+
+[phases.install]
+cmds = ["npm ci --omit=dev || npm install --omit=dev"]
+
+[start]
+cmd = "npm start"

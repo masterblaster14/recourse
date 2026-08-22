@@ -1,0 +1,204 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Recourse — risk layer for x402</title>
+<meta name="description" content="Providers stake a bond on Algorand, agents check reliability before paying, and SLA violations pay out from the bond automatically.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/style.css">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='24' fill='%23b9ff66'/><text x='50' y='72' font-size='62' font-family='monospace' font-weight='bold' text-anchor='middle' fill='%23191a23'>R</text></svg>">
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <div class="brand">
+      <div class="mark">R</div>
+      <div>
+        <h1>Recourse</h1>
+        <p>A risk layer for x402 on Algorand</p>
+      </div>
+    </div>
+    <div class="pills">
+      <span class="pill live"><span class="dot" id="dot-chain"></span><span id="chain-label">connecting…</span></span>
+      <span class="pill">app <strong id="pill-app">—</strong></span>
+      <span class="pill">asset <strong id="pill-asset">—</strong></span>
+      <span class="pill">agent <strong id="pill-agent">—</strong></span>
+      <span class="pill"><span class="dot" id="dot-sse"></span>events</span>
+    </div>
+  </header>
+
+  <!-- ------------------------------------------------------------- hero -->
+  <section class="hero">
+    <h2>x402 gives agents the ability to pay. Recourse gives them a reason to <em>trust</em> what they are paying for.</h2>
+    <p>
+      Providers stake a bond on Algorand and publish a machine-readable SLA. Agents check reliability
+      and bond coverage before paying. When a provider signs a response that violates its own published
+      SLA, the agent proves it on chain and compensation comes out of that provider's bond — refund,
+      slash and counter update in one atomic application call.
+    </p>
+    <div class="tagline">
+      <span class="tag-chip on">Algorand TestNet</span>
+      <span class="tag-chip">GoPlausible facilitator</span>
+      <span class="tag-chip">x402 · exact · AVM</span>
+      <span class="tag-chip">Machine to machine</span>
+    </div>
+  </section>
+
+  <!-- --------------------------------------------------------- stat band -->
+  <section class="statband" id="statband">
+    <div class="stat"><div class="n" id="st-providers">—</div><div class="l">Providers bonded</div></div>
+    <div class="stat"><div class="n" id="st-bonded">—</div><div class="l">Total bonded</div></div>
+    <div class="stat accent"><div class="n" id="st-claims">—</div><div class="l">Claims upheld on chain</div></div>
+    <div class="stat"><div class="n" id="st-slashed">—</div><div class="l">Slashed from bonds</div></div>
+    <div class="stat"><div class="n" id="st-payments">—</div><div class="l">x402 payments settled</div></div>
+  </section>
+
+  <!-- ------------------------------------------------------- proof strip -->
+  <section class="proof" id="proof">
+    <div class="proof-item">
+      <div class="k">Recourse app · TestNet</div>
+      <div class="v"><a id="proof-app" href="#" target="_blank" rel="noopener">—</a></div>
+    </div>
+    <div class="proof-item">
+      <div class="k">x402 payment settled</div>
+      <div class="v pending" id="proof-pay">awaiting first payment</div>
+    </div>
+    <div class="proof-item">
+      <div class="k">Bond deposit</div>
+      <div class="v pending" id="proof-bond">awaiting bond</div>
+    </div>
+    <div class="proof-item">
+      <div class="k">Upheld claim · refund + slash</div>
+      <div class="v pending" id="proof-claim">awaiting first claim</div>
+    </div>
+    <div class="proof-item">
+      <div class="k">Facilitator</div>
+      <div class="v"><a href="https://facilitator.goplausible.xyz" target="_blank" rel="noopener">GoPlausible</a></div>
+    </div>
+  </section>
+
+  <div class="grid">
+    <!-- ------------------------------------------------------- main column -->
+    <div>
+
+      <!-- routing ------------------------------------------------------- -->
+      <div class="card" id="routing">
+        <div class="route-banner" id="route-banner">
+          <span>◆</span><span id="route-banner-text"></span>
+        </div>
+        <div class="card-head">
+          <div>
+            <h2>Routing decision</h2>
+            <div class="sub">Which provider the autonomous agent will pay next, and why</div>
+          </div>
+          <div class="controls">
+            <input type="number" id="calls" value="26" min="4" max="120" title="number of x402 calls">
+            <button class="primary" id="run">Start the agent</button>
+          </div>
+        </div>
+        <div class="progress"><i id="progress"></i></div>
+        <div class="card-body">
+          <div class="lanes" id="lanes">
+            <div class="empty">Waiting for the first routing decision…</div>
+          </div>
+          <div class="route-note" id="route-note" style="display:none">
+            <span>call <b id="route-idx">—</b></span><span>·</span><span id="route-reason"></span>
+          </div>
+          <div class="note">
+            An agent explores an unmeasured provider because its <b>bond</b>, not a reputation it cannot yet
+            have, is what protects the buyer. Once there is enough evidence the score governs — and a provider
+            whose bond is gone is removed from routing entirely.
+          </div>
+          <div class="note accent">
+            <b>Machine to machine.</b> This page is an observer. It holds no keys and cannot pay for anything.
+            The button starts an autonomous agent that holds its own Algorand keypair, declares its own spend
+            limit, and then decides where its money goes with <b>no human approving any individual payment</b>.
+          </div>
+        </div>
+      </div>
+
+      <!-- providers ----------------------------------------------------- -->
+      <div class="card">
+        <div class="card-head">
+          <div><h2>Bonded providers</h2><div class="sub">Live from box storage on Algorand TestNet</div></div>
+          <div class="sub" id="explore-note"></div>
+        </div>
+        <div class="card-body">
+          <div class="providers" id="providers">
+            <div class="empty">Loading providers…</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- feed ---------------------------------------------------------- -->
+      <div class="card">
+        <div class="card-head">
+          <div><h2>Live call feed</h2><div class="sub">Every x402 payment, verification and claim as it happens</div></div>
+          <button id="clear">Clear</button>
+        </div>
+        <div class="feed" id="feed">
+          <div class="empty">No activity yet. Press <b>Start the agent</b> and it will begin buying over x402.</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- --------------------------------------------------------- sidebar -->
+    <aside>
+      <div class="card">
+        <div class="card-head"><div><h2>This run</h2><div class="sub">Real money on TestNet</div></div></div>
+        <div class="card-body">
+          <div class="kv">
+            <div class="k">x402 calls paid</div><div class="v" id="s-paid">0</div>
+            <div class="k">Verified good</div><div class="v" id="s-pass">0</div>
+            <div class="k">SLA violations</div><div class="v" id="s-fail">0</div>
+            <div class="k">Claims upheld on chain</div><div class="v" id="s-claims">0</div>
+            <div class="k">Spent on calls</div><div class="v" id="s-spent">0</div>
+            <div class="k">Refunded from bonds</div><div class="v" id="s-refund">0</div>
+            <div class="k">Slashed to treasury</div><div class="v" id="s-slash">0</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-head"><div><h2>Registry</h2><div class="sub">Global state, on chain</div></div></div>
+        <div class="card-body">
+          <div class="kv" id="registry">
+            <div class="k">loading…</div><div class="v">—</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-head">
+          <div><h2>Claim ledger</h2><div class="sub">Each one is an Algorand transaction</div></div>
+        </div>
+        <div id="claims"><div class="empty">No claims filed yet.</div></div>
+      </div>
+
+      <div class="card">
+        <div class="card-head"><div><h2>Paid endpoints</h2><div class="sub">x402 · exact · Algorand TestNet</div></div></div>
+        <div class="card-body">
+          <div class="kv" id="endpoints"><div class="k">loading…</div><div class="v">—</div></div>
+          <div class="note" id="limits">
+            <b>Known limit.</b> An on-chain claim covers a response the provider <em>signed</em> that breaches
+            its own published SLA. A provider that withholds the signature entirely is marked down in the
+            observed score but cannot be slashed. Closing that needs a challenge window — that is v2, and it
+            is not built here.
+          </div>
+        </div>
+      </div>
+    </aside>
+  </div>
+
+  <footer>
+    <div>Recourse · x402 Global Challenge · Algorand TestNet · settled through the GoPlausible facilitator</div>
+    <div id="foot-links"></div>
+  </footer>
+</div>
+<script src="/app.js"></script>
+</body>
+</html>

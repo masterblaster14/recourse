@@ -1,0 +1,45 @@
+{
+  "name": "recourse",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Recourse - a risk layer for x402. Providers stake a bond on Algorand, agents check reliability before paying, and SLA violations pay out from the bond automatically.",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "start": "tsx src/index.ts",
+    "build": "tsc --noEmit",
+    "accounts": "tsx src/scripts/gen-accounts.ts",
+    "contract:build": "tsx src/scripts/build-contract.ts",
+    "contract:deploy": "tsx src/scripts/deploy-contract.ts",
+    "setup": "tsx src/scripts/setup.ts",
+    "preflight": "tsx src/scripts/preflight.ts",
+    "demo": "tsx src/scripts/demo.ts",
+    "fund": "tsx src/scripts/fund.ts",
+    "asset:mint": "tsx src/scripts/mint-test-asset.ts",
+    "topup": "tsx src/scripts/topup.ts",
+    "readme": "tsx src/scripts/readme-proof.ts",
+    "sweep": "tsx src/scripts/sweep.ts",
+    "verify:guards": "tsx src/scripts/verify-guards.ts"
+  },
+  "dependencies": {
+    "@hono/node-server": "^1.19.9",
+    "@x402-avm/extensions": "^2.6.1",
+    "@x402/avm": "^2.23.0",
+    "@x402/core": "^2.23.0",
+    "@x402/fetch": "^2.23.0",
+    "@x402/hono": "^2.23.0",
+    "algosdk": "^3.4.0",
+    "dotenv": "^17.3.1",
+    "hono": "^4.12.2",
+    "pg": "^8.16.3"
+  },
+  "devDependencies": {
+    "@types/node": "^24.10.1",
+    "@types/pg": "^8.15.6",
+    "tsx": "^4.21.0",
+    "typescript": "^5.9.3"
+  }
+}

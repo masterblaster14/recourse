@@ -1,0 +1,507 @@
+/**
+ * Everything that touches Algorand: deploying the Recourse app, calling its ABI
+ * methods, and reading provider state straight out of box storage.
+ *
+ * Box reads are done raw rather than through a simulate call. The Provider
+ * struct is fixed width by design, so decoding it is 20 lines and costs nothing.
+ */
+import algosdk from "algosdk";
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
+import { env } from "../env.ts";
+
+// ------------------------------------------------------------------- clients
+
+let _algod: algosdk.Algodv2 | null = null;
+export function algod(): algosdk.Algodv2 {
+  if (!_algod) _algod = new algosdk.Algodv2(env.algodToken, env.algodUrl, "");
+  return _algod;
+}
+
+// ------------------------------------------------------------------ app spec
+
+export type Arc56Method = {
+  name: string;
+  args: { type: string; name?: string }[];
+  returns: { type: string };
+};
+export type Arc56Spec = {
+  name: string;
+  methods: Arc56Method[];
+  source?: { approval: string; clear: string };
+  state: {
+    schema: {
+      global: { ints: number; bytes: number };
+      local: { ints: number; bytes: number };
+    };
+    keys?: { global?: Record<string, { key: string; valueType: string }> };
+  };
+};
+
+const SPEC_PATH = resolve(process.cwd(), "contracts/build/Recourse.arc56.json");
+
+let _spec: Arc56Spec | null = null;
+export function spec(): Arc56Spec {
+  if (!_spec) _spec = JSON.parse(readFileSync(SPEC_PATH, "utf8")) as Arc56Spec;
+  return _spec;
+}
+
+export function abiMethod(name: string): algosdk.ABIMethod {
+  const m = spec().methods.find(x => x.name === name);
+  if (!m) throw new Error(`Method not in app spec: ${name}`);
+  return new algosdk.ABIMethod({
+    name: m.name,
+    args: m.args.map(a => ({ type: a.type, name: a.name })),
+    returns: { type: m.returns.type },
+  });
+}
+
+/** TEAL source, stored base64 in the ARC-56 file. */
+export function tealSource(): { approval: string; clear: string } {
+  const s = spec().source;
+  if (!s) throw new Error("ARC-56 spec has no embedded source; recompile with --output-arc56");
+  return {
+    approval: Buffer.from(s.approval, "base64").toString("utf8"),
+    clear: Buffer.from(s.clear, "base64").toString("utf8"),
+  };
+}
+
+// ------------------------------------------------------------------- helpers
+
+export function signerFor(account: algosdk.Account): algosdk.TransactionSigner {
+  return algosdk.makeBasicAccountTransactionSigner(account);
+}
+
+export function providerBoxName(address: string): Uint8Array {
+  return new Uint8Array([
+    ...Buffer.from("p_", "utf8"),
+    ...algosdk.decodeAddress(address).publicKey,
+  ]);
+}
+
+export function claimBoxName(requestId: Buffer): Uint8Array {
+  return new Uint8Array([...Buffer.from("c_", "utf8"), ...requestId]);
+}
+
+async function params(fee?: number): Promise<algosdk.SuggestedParams> {
+  const sp = await algod().getTransactionParams().do();
+  if (fee !== undefined) {
+    sp.fee = BigInt(fee);
+    sp.flatFee = true;
+  }
+  return sp;
+}
+
+function toBytes(v: unknown): Uint8Array {
+  if (v instanceof Uint8Array) return v;
+  if (typeof v === "string") return new Uint8Array(Buffer.from(v, "base64"));
+  return new Uint8Array();
+}
+
+// -------------------------------------------------------------------- deploy
+
+export async function compilePrograms(): Promise<{ approval: Uint8Array; clear: Uint8Array }> {
+  const src = tealSource();
+  const a = await algod().compile(src.approval).do();
+  const c = await algod().compile(src.clear).do();
+  return {
+    approval: new Uint8Array(Buffer.from(a.result, "base64")),
+    clear: new Uint8Array(Buffer.from(c.result, "base64")),
+  };
+}
+
+export async function deployApp(
+  deployer: algosdk.Account,
+  assetId: number,
+): Promise<{ appId: number; appAddress: string; txid: string }> {
+  const { approval, clear } = await compilePrograms();
+  // 2048 bytes per program page; page 0 comes free with the app.
+  const extraPages = Math.min(3, Math.max(0, Math.ceil(approval.length / 2048) - 1));
+  const s = spec().state.schema;
+
+  const atc = new algosdk.AtomicTransactionComposer();
+  atc.addMethodCall({
+    appID: 0,
+    method: abiMethod("create"),
+    methodArgs: [assetId],
+    sender: deployer.addr.toString(),
+    signer: signerFor(deployer),
+    suggestedParams: await params(),
+    onComplete: algosdk.OnApplicationComplete.NoOpOC,
+    approvalProgram: approval,
+    clearProgram: clear,
+    numGlobalInts: s.global.ints,
+    numGlobalByteSlices: s.global.bytes,
+    numLocalInts: s.local.ints,
+    numLocalByteSlices: s.local.bytes,
+    extraPages,
+  });
+
+  const res = await atc.execute(algod(), 6);
+  const confirmed = await algod().pendingTransactionInformation(res.txIDs[0]).do();
+  const appId = Number(confirmed.applicationIndex);
+  return {
+    appId,
+    appAddress: algosdk.getApplicationAddress(appId).toString(),
+    txid: res.txIDs[0],
+  };
+}
+
+export async function fundAccount(
+  from: algosdk.Account,
+  to: string,
+  microAlgos: number,
+  note?: string,
+): Promise<string> {
+  const txn = algosdk.makePaymentTxnWithSuggestedParamsFromObject({
+    sender: from.addr.toString(),
+    receiver: to,
+    amount: microAlgos,
+    suggestedParams: await params(),
+    note: note ? new Uint8Array(Buffer.from(note, "utf8")) : undefined,
+  });
+  const signed = txn.signTxn(from.sk);
+  const { txid } = await algod().sendRawTransaction(signed).do();
+  await algosdk.waitForConfirmation(algod(), txid, 6);
+  return txid;
+}
+
+/** Opt an ordinary account into the payment/bond asset. Idempotent. */
+export async function optInAsset(
+  account: algosdk.Account,
+  assetId: number,
+): Promise<string | null> {
+  const info = await accountInfo(account.addr.toString());
+  if (info.assets.some(a => a.assetId === assetId)) return null;
+  const txn = algosdk.makeAssetTransferTxnWithSuggestedParamsFromObject({
+    sender: account.addr.toString(),
+    receiver: account.addr.toString(),
+    amount: 0,
+    assetIndex: assetId,
+    suggestedParams: await params(),
+  });
+  const signed = txn.signTxn(account.sk);
+  const { txid } = await algod().sendRawTransaction(signed).do();
+  await algosdk.waitForConfirmation(algod(), txid, 6);
+  return txid;
+}
+
+export async function sendAsset(
+  from: algosdk.Account,
+  to: string,
+  assetId: number,
+  amount: number,
+): Promise<string> {
+  const txn = algosdk.makeAssetTransferTxnWithSuggestedParamsFromObject({
+    sender: from.addr.toString(),
+    receiver: to,
+    amount,
+    assetIndex: assetId,
+    suggestedParams: await params(),
+  });
+  const signed = txn.signTxn(from.sk);
+  const { txid } = await algod().sendRawTransaction(signed).do();
+  await algosdk.waitForConfirmation(algod(), txid, 6);
+  return txid;
+}
+
+// ---------------------------------------------------------------- app methods
+
+export async function appOptInAsset(
+  deployer: algosdk.Account,
+  appId: number,
+  assetId: number,
+): Promise<string> {
+  const atc = new algosdk.AtomicTransactionComposer();
+  atc.addMethodCall({
+    appID: appId,
+    method: abiMethod("opt_in_asset"),
+    methodArgs: [],
+    sender: deployer.addr.toString(),
+    signer: signerFor(deployer),
+    suggestedParams: await params(3000), // outer + inner axfer, with headroom
+    appForeignAssets: [assetId],
+  });
+  const res = await atc.execute(algod(), 6);
+  return res.txIDs[0];
+}
+
+export async function registerProvider(
+  provider: algosdk.Account,
+  opts: {
+    appId: number;
+    pubkey: Buffer;
+    slaHash: Buffer;
+    priceMicro: number;
+    maxStaleness: number;
+    maxLatencyMs: number;
+  },
+): Promise<string> {
+  const atc = new algosdk.AtomicTransactionComposer();
+  atc.addMethodCall({
+    appID: opts.appId,
+    method: abiMethod("register"),
+    methodArgs: [
+      Array.from(opts.pubkey),
+      Array.from(opts.slaHash),
+      opts.priceMicro,
+      opts.maxStaleness,
+      opts.maxLatencyMs,
+    ],
+    sender: provider.addr.toString(),
+    signer: signerFor(provider),
+    suggestedParams: await params(2000),
+    boxes: [{ appIndex: opts.appId, name: providerBoxName(provider.addr.toString()) }],
+  });
+  const res = await atc.execute(algod(), 6);
+  return res.txIDs[0];
+}
+
+export async function depositBond(
+  provider: algosdk.Account,
+  opts: { appId: number; assetId: number; amountMicro: number },
+): Promise<{ txid: string; bondMicro: number }> {
+  const appAddress = algosdk.getApplicationAddress(opts.appId).toString();
+  const axfer = algosdk.makeAssetTransferTxnWithSuggestedParamsFromObject({
+    sender: provider.addr.toString(),
+    receiver: appAddress,
+    amount: opts.amountMicro,
+    assetIndex: opts.assetId,
+    suggestedParams: await params(),
+  });
+
+  const atc = new algosdk.AtomicTransactionComposer();
+  atc.addMethodCall({
+    appID: opts.appId,
+    method: abiMethod("deposit_bond"),
+    methodArgs: [{ txn: axfer, signer: signerFor(provider) }],
+    sender: provider.addr.toString(),
+    signer: signerFor(provider),
+    suggestedParams: await params(2000),
+    appForeignAssets: [opts.assetId],
+    boxes: [{ appIndex: opts.appId, name: providerBoxName(provider.addr.toString()) }],
+  });
+  const res = await atc.execute(algod(), 6);
+  return {
+    txid: res.txIDs[res.txIDs.length - 1],
+    bondMicro: Number(res.methodResults[0]?.returnValue ?? 0),
+  };
+}
+
+/**
+ * File a claim.
+ *
+ * Padded with two no-op app calls so the group pools 3 x 700 = 2100 units of
+ * opcode budget. ed25519verify_bare alone costs 1900 against a 700 default, so
+ * an unpadded call would fail. The contract also calls ensure_budget, which
+ * covers any caller that forgets the padding.
+ */
+export async function submitClaim(
+  payer: algosdk.Account,
+  opts: {
+    appId: number;
+    assetId: number;
+    provider: string;
+    treasury: string;
+    requestId: Buffer;
+    responseHash: Buffer;
+    dataTimestamp: number;
+    signature: Buffer;
+  },
+): Promise<{ txid: string; refundMicro: number; groupTxIds: string[] }> {
+  const atc = new algosdk.AtomicTransactionComposer();
+  const sender = payer.addr.toString();
+  const signer = signerFor(payer);
+
+  for (let i = 0; i < 2; i++) {
+    atc.addMethodCall({
+      appID: opts.appId,
+      method: abiMethod("noop"),
+      methodArgs: [],
+      sender,
+      signer,
+      suggestedParams: await params(0),
+      // Distinct notes, or the two padding calls would collide on txid.
+      note: new Uint8Array(Buffer.from(`recourse-opup-${i}`, "utf8")),
+    });
+  }
+
+  atc.addMethodCall({
+    appID: opts.appId,
+    method: abiMethod("submit_claim"),
+    methodArgs: [
+      opts.provider,
+      new Uint8Array(opts.requestId),
+      new Uint8Array(opts.responseHash),
+      opts.dataTimestamp,
+      new Uint8Array(opts.signature),
+    ],
+    sender,
+    signer,
+    // Fee-pooled across the group: 3 outer + up to 2 inner axfers + headroom.
+    suggestedParams: await params(10_000),
+    appForeignAssets: [opts.assetId],
+    appAccounts: [opts.provider, opts.treasury],
+    boxes: [
+      { appIndex: opts.appId, name: providerBoxName(opts.provider) },
+      { appIndex: opts.appId, name: claimBoxName(opts.requestId) },
+    ],
+  });
+
+  const res = await atc.execute(algod(), 6);
+  const last = res.methodResults[res.methodResults.length - 1];
+  return {
+    txid: res.txIDs[res.txIDs.length - 1],
+    refundMicro: Number(last?.returnValue ?? 0),
+    groupTxIds: res.txIDs,
+  };
+}
+
+export async function recordSuccess(
+  deployer: algosdk.Account,
+  opts: { appId: number; provider: string; count: number },
+): Promise<string> {
+  const atc = new algosdk.AtomicTransactionComposer();
+  atc.addMethodCall({
+    appID: opts.appId,
+    method: abiMethod("record_success"),
+    methodArgs: [opts.provider, opts.count],
+    sender: deployer.addr.toString(),
+    signer: signerFor(deployer),
+    suggestedParams: await params(2000),
+    boxes: [{ appIndex: opts.appId, name: providerBoxName(opts.provider) }],
+  });
+  const res = await atc.execute(algod(), 6);
+  return res.txIDs[0];
+}
+
+// ---------------------------------------------------------------------- reads
+
+export type ProviderState = {
+  address: string;
+  pubkey: Buffer;
+  slaHash: Buffer;
+  priceMicro: number;
+  maxStaleness: number;
+  maxLatencyMs: number;
+  bondMicro: number;
+  successCount: number;
+  claimCount: number;
+  slashedMicro: number;
+  active: boolean;
+};
+
+/** Provider is a fixed-width ARC-4 struct: 32 + 32 + 8*7 + 1 = 121 bytes. */
+export function decodeProvider(address: string, raw: Uint8Array): ProviderState {
+  const b = Buffer.from(raw);
+  if (b.length < 121) throw new Error(`provider box too short: ${b.length} bytes`);
+  const u64 = (off: number) => Number(b.readBigUInt64BE(off));
+  return {
+    address,
+    pubkey: b.subarray(0, 32),
+    slaHash: b.subarray(32, 64),
+    priceMicro: u64(64),
+    maxStaleness: u64(72),
+    maxLatencyMs: u64(80),
+    bondMicro: u64(88),
+    successCount: u64(96),
+    claimCount: u64(104),
+    slashedMicro: u64(112),
+    // ARC-4 packs a trailing bool into one byte, value in the high bit.
+    active: (b[120] & 0x80) !== 0,
+  };
+}
+
+export async function readProvider(
+  appId: number,
+  address: string,
+): Promise<ProviderState | null> {
+  try {
+    const box = await algod().getApplicationBoxByName(appId, providerBoxName(address)).do();
+    return decodeProvider(address, toBytes(box.value));
+  } catch (err: unknown) {
+    const msg = String((err as Error)?.message ?? err);
+    if (msg.includes("box not found") || msg.includes("404")) return null;
+    throw err;
+  }
+}
+
+export type GlobalStateView = {
+  assetId: number;
+  treasury: string;
+  providerCount: number;
+  claimCount: number;
+  totalBonded: number;
+  totalSlashed: number;
+};
+
+/**
+ * ARC-56 field names are not the on-chain key bytes — `provider_count` is stored
+ * under the key "providers". Resolving names through the spec means renaming a
+ * field in the contract can never silently zero out a dashboard number.
+ */
+function globalKeyBytes(name: string): string {
+  const entry = spec().state.keys?.global?.[name];
+  return entry ? Buffer.from(entry.key, "base64").toString("utf8") : name;
+}
+
+export async function readGlobalState(appId: number): Promise<GlobalStateView> {
+  const app = await algod().getApplicationByID(appId).do();
+  const entries = (app.params?.globalState ?? []) as unknown as {
+    key: unknown;
+    value: { bytes: unknown; uint: unknown };
+  }[];
+  const map = new Map<string, { bytes: Uint8Array; uint: number }>();
+  for (const e of entries) {
+    map.set(Buffer.from(toBytes(e.key)).toString("utf8"), {
+      bytes: toBytes(e.value.bytes),
+      uint: Number(e.value.uint ?? 0),
+    });
+  }
+  const get = (name: string) => map.get(globalKeyBytes(name));
+  const treasuryBytes = get("treasury")?.bytes ?? new Uint8Array(0);
+  return {
+    assetId: get("asset_id")?.uint ?? 0,
+    treasury: treasuryBytes.length === 32 ? algosdk.encodeAddress(treasuryBytes) : "",
+    providerCount: get("provider_count")?.uint ?? 0,
+    claimCount: get("claim_count")?.uint ?? 0,
+    totalBonded: get("total_bonded")?.uint ?? 0,
+    totalSlashed: get("total_slashed")?.uint ?? 0,
+  };
+}
+
+export type AccountView = {
+  address: string;
+  microAlgos: number;
+  minBalance: number;
+  assets: { assetId: number; amount: number }[];
+};
+
+export async function accountInfo(address: string): Promise<AccountView> {
+  const info = await algod().accountInformation(address).do();
+  return {
+    address,
+    microAlgos: Number(info.amount),
+    minBalance: Number(info.minBalance),
+    assets: (info.assets ?? []).map(a => ({
+      assetId: Number(a.assetId),
+      amount: Number(a.amount),
+    })),
+  };
+}
+
+/** null means "not opted in", which is different from a zero balance. */
+export async function assetBalance(address: string, assetId: number): Promise<number | null> {
+  const info = await accountInfo(address);
+  const holding = info.assets.find(a => a.assetId === assetId);
+  return holding ? holding.amount : null;
+}
+
+export async function chainHealthy(): Promise<{ ok: boolean; round?: number; error?: string }> {
+  try {
+    const s = await algod().status().do();
+    return { ok: true, round: Number(s.lastRound) };
+  } catch (err) {
+    return { ok: false, error: String((err as Error)?.message ?? err) };
+  }
+}
