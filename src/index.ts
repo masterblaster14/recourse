@@ -70,10 +70,24 @@ app.get("/x402", c =>
     facilitator: env.facilitatorUrl,
     asset: { id: env.assetId, symbol: env.assetSymbol, decimals: env.assetDecimals },
     packages: ["@x402/avm", "@x402/core", "@x402/hono", "@x402/fetch", "@x402-avm/extensions"],
+    // Generated from the provider list, not hand-listed. Indexing into
+    // providers() by position silently reported the wrong payTo the moment a
+    // provider was added in the middle of the array.
     paid_routes: [
-      { method: "GET", path: "/score", price: fromMicro(env.scorePriceMicro), payTo: env.treasuryAddress },
-      { method: "GET", path: "/feed/compliant", price: fromMicro(env.priceMicro), payTo: providers()[0]?.address },
-      { method: "GET", path: "/feed/stale", price: fromMicro(env.priceMicro), payTo: providers()[1]?.address },
+      {
+        method: "GET",
+        path: "/score",
+        price: fromMicro(env.scorePriceMicro),
+        payTo: env.treasuryAddress,
+      },
+      ...providers().map(p => ({
+        method: "GET",
+        path: p.path,
+        price: fromMicro(env.priceMicro),
+        payTo: p.address,
+        provider: p.label,
+        behaviour: p.variant,
+      })),
     ],
   }),
 );
@@ -117,8 +131,8 @@ async function main(): Promise<void> {
     console.log(`  store          ${s.kind}`);
     console.log(`  algod          ${chain.ok ? `round ${chain.round}` : `UNREACHABLE (${chain.error})`}`);
     console.log(bar);
-    console.log("  paid   GET /score?provider=<addr>   GET /feed/compliant   GET /feed/stale");
-    console.log("  free   GET /providers  /sla  /registry  /claims  /payments  /health  /events");
+    console.log(`  paid   GET /score?provider=<addr>   ${providers().map(p => `GET ${p.path}`).join("   ")}`);
+    console.log("  free   /providers /sla /registry /ecosystem /preflight /claims /payments /proof /health /events");
     console.log(bar);
     for (const p of providers()) {
       const h = slaHash(slaFor(p)).toString("hex").slice(0, 16);

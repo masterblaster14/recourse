@@ -1,18 +1,83 @@
 # Recourse
 
-**A risk layer for x402.** API providers stake a bond on Algorand and publish a
-machine-readable SLA. Agents check reliability and bond coverage *before* paying.
-When a provider signs a response that violates its own published SLA, the agent
-files a claim and compensation is paid out of that provider's bond automatically.
+**A risk layer for x402.** x402 lets an agent pay for an API call with no human
+approving it — but it pays *first*, then receives the response. If that response
+is stale or malformed, the money is gone and there is no recourse.
+
+Recourse is the missing half. Providers stake a bond on Algorand and publish a
+machine-readable SLA. Agents check reliability and bond coverage *before*
+paying. When a provider signs a response that breaches its own published SLA,
+the agent proves it on chain and compensation comes out of that provider's bond.
 
 > x402 gives agents the ability to pay. Recourse gives them a reason to trust
 > what they are paying for.
 
-**Live:** <https://recourse-api-production.up.railway.app> · all three paid
-endpoints are listed in the public
-[GoPlausible Bazaar catalog](https://facilitator.goplausible.xyz/dashboard/leaderboards?cat=resources).
+**Live:** <https://recourse-api-production.up.railway.app> ·
+**App:** [`769688356`](https://lora.algokit.io/testnet/application/769688356) ·
+**Network:** Algorand TestNet via the GoPlausible facilitator
 
-<!-- PROOF:START -->
+---
+
+## Verify it yourself in 60 seconds
+
+Nothing here needs to be taken on trust. Every claim below is checkable from a
+terminal.
+
+**1. A real 402, with a real price, paid to a real address:**
+
+```bash
+curl -i https://recourse-api-production.up.railway.app/feed/compliant
+```
+
+Decode the `PAYMENT-REQUIRED` header and you get `scheme: exact`, the Algorand
+TestNet CAIP-2 network, `1000` micro USDC (asset `10458941`), the provider's
+`payTo` address, and GoPlausible's fee payer.
+
+**2. Every transaction that proves this ran:**
+
+```bash
+curl https://recourse-api-production.up.railway.app/proof
+```
+
+**3. The bonds, read live from box storage on chain:**
+
+```bash
+curl https://recourse-api-production.up.railway.app/providers
+```
+
+**4. How much of the *live* x402 market has any collateral behind it:**
+
+```bash
+curl https://recourse-api-production.up.railway.app/ecosystem
+```
+
+**5. That the contract's guarantees actually hold** — nine adversarial checks
+against the deployed app, including attempts to rotate the signing key, widen
+the SLA, forge a timestamp and replay a claim:
+
+```bash
+npm install && npm run test:chain
+```
+
+---
+
+## What the organisers said they would check
+
+| Criterion | Where it is |
+|---|---|
+| x402 payment flow **live on Algorand TestNet** | [live API](https://recourse-api-production.up.railway.app/health) · 4 bonded providers, 5 paid routes |
+| **An actual x402 transaction** viewable on Lora | proof table below — payment, bond, claim, all linked |
+| Payment settles through the **GoPlausible facilitator** | [`src/x402.ts`](src/x402.ts) — `HTTPFacilitatorClient`, fee payer visible in every 402 |
+| **`@x402` AVM dependencies** in `package.json` | `@x402/avm` `@x402/core` `@x402/hono` `@x402/fetch` `@x402-avm/extensions` |
+| x402 **genuinely integrated**, not just mentioned | Remove x402 and this product has no reason to exist — see [How x402 is integrated](#how-x402-is-integrated) |
+| **Machine to machine**, not human to machine | No human approves any payment — see [below](#this-is-machine-to-machine-by-construction) |
+| Endpoint **indexed in the Bazaar catalog** | listed in the [public catalog](https://facilitator.goplausible.xyz/dashboard/leaderboards?cat=resources) — a route appears once a real payment against it settles |
+
+Against the [x402 idea scorecard](https://x402-kit-kappa.vercel.app/scorecard): **12/12**,
+with per-question reasoning in [Scorecard self-assessment](#scorecard-self-assessment).
+
+---
+
 ## Live proof
 
 | Item | Link |
@@ -42,6 +107,8 @@ endpoints are listed in the public
 `GET /proof` on the live API returns this table as JSON, recorded as each
 transaction lands rather than transcribed by hand.
 <!-- PROOF:END -->
+
+---
 
 ---
 
@@ -185,6 +252,35 @@ separate from `claim_count`, which is proven on chain. The score shows both.
 
 ---
 
+## The demo
+
+Both providers are bonded at 0.1 USDC and priced at 0.001 USDC per call. Both
+publish `max_staleness_s: 60`. A bond of 0.1 covers exactly **10 upheld claims**
+(refund 0.001 + slash 0.009 = 0.01 each).
+
+Open the dashboard and press **Run live demo**:
+
+1. Both providers look identical — bonded, active, **unmeasured**. The score says
+   `low` confidence, not "100% reliable". A provider with one good call is not
+   perfect, it is unmeasured, and a score that cannot say so is worse than none.
+2. The agent **explores** both, because the *bond* — not a reputation neither has
+   yet — is what protects it. This is the part that un-gates new providers.
+3. Provider A's responses pass all six checks. Provider B's fail check 4
+   (staleness) while passing check 6 (signature): a provable violation.
+4. Each violation is claimed on chain. B's bond drains 0.01 at a time, live.
+5. On call ~20, B's tenth claim empties the bond. The exhaustion branch fires,
+   the contract marks it **inactive**, and the routing panel flips: B is
+   excluded and every remaining call goes to A.
+
+**Step 5 is the whole pitch**, so the routing decision is a first-class panel on
+screen, not a line in a log.
+
+```bash
+npm run demo -- --calls 30      # same run, streamed to your terminal
+```
+
+---
+
 ## Known limits
 
 - **Withheld signatures are not slashable.** An on-chain claim covers a response
@@ -228,6 +324,67 @@ separate from `claim_count`, which is proven on chain. The score shows both.
 
 ---
 
+## The forger, and the honest limit of cryptographic proof
+
+Staleness is measured against a timestamp the provider itself signs. So the
+obvious attack is simply to lie about it: serve 45-minute-old data stamped
+`now()`. That response passes **all six checks** — valid signature, matching
+hash, timestamp inside the bound — and **cannot be slashed**. No cryptographic
+test catches it, because in isolation a lie about time is indistinguishable
+from the truth.
+
+`/feed/forger` is exactly that provider, bonded and live alongside the others,
+so the gap is demonstrated rather than described.
+
+What catches it is that a lie about time is *not* indistinguishable across a
+market. Every provider publishes `(claimed_timestamp, price)` pairs. A provider
+honest about being stale — old price, old timestamp — sits on the same price
+path as a fresh one; both are telling the truth about a different moment. The
+forger claims *now* while carrying a value from 45 minutes ago, so it disagrees
+with everyone else about a moment it named itself.
+
+Two things about that check are deliberate:
+
+- **No oracle.** The reference is the median of what providers collectively
+  claim, one vote each. We never designate a source as truthful, and we never
+  assert what the price "really" was. A minority forger stands out; that is all.
+- **It requires three.** With two providers the median is their midpoint and
+  each looks half-wrong — a tie, where picking a side is guessing. Three is the
+  smallest set in which a majority can exist, which is why the demo runs two
+  honest feeds and not one.
+
+And the conclusion is a score, never a slash. Slashing on a statistic would be
+precisely the centralised adjudication this project exists to remove.
+
+## What is provable, what is observed, and what is neither
+
+The most common way to overclaim in this space is to present every check as if
+it carries the same weight. These do not, and the difference decides what can
+touch collateral.
+
+| Condition | Provable from signed bytes | Observed only | Needs an external reference |
+|---|:--:|:--:|:--:|
+| required fields present | ✅ | | |
+| `response_hash` matches the delivered payload | ✅ | | |
+| signature valid against the on-chain pubkey | ✅ | | |
+| signed timestamp older than the published bound | ✅ | | |
+| HTTP 200 / provider answered at all | | ✅ | |
+| latency | | ✅ | |
+| price agrees with the rest of the market | | ✅ | |
+| the signed timestamp is *truthful* | | | ⚠️ |
+| the data is *correct* | | | ⚠️ |
+
+**Only the first block can be slashed.** Those four are checked inside the
+contract, by the contract, from bytes the provider signed. Everything in the
+second block feeds the reliability score and the routing decision, and never
+touches the bond — a provider that fails them loses traffic, not collateral.
+Nothing in the third block is claimed at all.
+
+Latency deserves its place in the middle column specifically: an x402 server
+settles payment on chain before returning the resource, so several seconds of
+Algorand finality sit inside every measurement and no client can separate them
+from the provider's own work. It is not attributable, so it is not slashable.
+
 ## The market this is for
 
 `GET /ecosystem` reads the public GoPlausible Bazaar — every x402 endpoint an
@@ -265,275 +422,6 @@ report only observable facts — price, recipient, network, settlement count, an
 whether collateral is posted. No reliability score, no rating. Claiming to
 measure a stranger's uptime from a directory listing would undercut the entire
 argument for measuring anything properly.
-
-## What is provable, what is observed, and what is neither
-
-The most common way to overclaim in this space is to present every check as if
-it carries the same weight. These do not, and the difference decides what can
-touch collateral.
-
-| Condition | Provable from signed bytes | Observed only | Needs an external reference |
-|---|:--:|:--:|:--:|
-| required fields present | ✅ | | |
-| `response_hash` matches the delivered payload | ✅ | | |
-| signature valid against the on-chain pubkey | ✅ | | |
-| signed timestamp older than the published bound | ✅ | | |
-| HTTP 200 / provider answered at all | | ✅ | |
-| latency | | ✅ | |
-| price agrees with the rest of the market | | ✅ | |
-| the signed timestamp is *truthful* | | | ⚠️ |
-| the data is *correct* | | | ⚠️ |
-
-**Only the first block can be slashed.** Those four are checked inside the
-contract, by the contract, from bytes the provider signed. Everything in the
-second block feeds the reliability score and the routing decision, and never
-touches the bond — a provider that fails them loses traffic, not collateral.
-Nothing in the third block is claimed at all.
-
-Latency deserves its place in the middle column specifically: an x402 server
-settles payment on chain before returning the resource, so several seconds of
-Algorand finality sit inside every measurement and no client can separate them
-from the provider's own work. It is not attributable, so it is not slashable.
-
-## The forger, and the honest limit of cryptographic proof
-
-Staleness is measured against a timestamp the provider itself signs. So the
-obvious attack is simply to lie about it: serve 45-minute-old data stamped
-`now()`. That response passes **all six checks** — valid signature, matching
-hash, timestamp inside the bound — and **cannot be slashed**. No cryptographic
-test catches it, because in isolation a lie about time is indistinguishable
-from the truth.
-
-`/feed/forger` is exactly that provider, bonded and live alongside the others,
-so the gap is demonstrated rather than described.
-
-What catches it is that a lie about time is *not* indistinguishable across a
-market. Every provider publishes `(claimed_timestamp, price)` pairs. A provider
-honest about being stale — old price, old timestamp — sits on the same price
-path as a fresh one; both are telling the truth about a different moment. The
-forger claims *now* while carrying a value from 45 minutes ago, so it disagrees
-with everyone else about a moment it named itself.
-
-Two things about that check are deliberate:
-
-- **No oracle.** The reference is the median of what providers collectively
-  claim, one vote each. We never designate a source as truthful, and we never
-  assert what the price "really" was. A minority forger stands out; that is all.
-- **It requires three.** With two providers the median is their midpoint and
-  each looks half-wrong — a tie, where picking a side is guessing. Three is the
-  smallest set in which a majority can exist, which is why the demo runs two
-  honest feeds and not one.
-
-And the conclusion is a score, never a slash. Slashing on a statistic would be
-precisely the centralised adjudication this project exists to remove.
-
-## The one gap that is still open, and its exact v2
-
-A provider that returns nothing, or returns something unsigned, cannot be
-slashed. There is no artifact to check, so no proof exists. This is the last
-real hole and it is not closable by cryptography — only by a game.
-
-**The design.** An agent opens a dispute naming the provider and the
-`request_id` it paid for. The provider has a fixed window to post a valid
-signed response for that id. Silence slashes; a valid signature does not.
-
-**Why this one needs a claimant deposit when the staleness path does not.** A
-staleness claim is self-proving — the contract can check it from bytes the
-provider signed, so filing a false one is impossible and a deposit would defend
-nothing. Non-delivery is the opposite: the *absence* of evidence is the
-allegation, and nothing stops an agent alleging it about a provider that
-answered perfectly well. So the disputant stakes a deposit, forfeited to the
-provider if a valid signed response appears.
-
-That asymmetry is the whole point. Deposits are friction, and friction belongs
-only where a claim cannot prove itself.
-
-**Why it is not built here.** It needs a dispute lifecycle in the contract, a
-second actor in the demo, and a window long enough to be meaningful but short
-enough to watch. A half-built challenge window is worse than a specified one,
-and this is a hackathon build with a stated scope.
-
-**What would make it stronger still.** If the x402 signed offers and receipts
-extension is available on AVM, the provider's signed offer at 402 time plus the
-absence of a receipt turns "it never answered" into a much more legible claim.
-Worth adopting before building the dispute lifecycle, not after.
-
-## Why bonds and not escrow
-
-The intuitive fix for "I paid and got junk" is escrow: hold the buyer's money
-until the response is judged good. It is the right primitive for a $5,000
-milestone and the wrong one here, for four reasons.
-
-**There is nowhere to put it in the protocol.** The x402 `exact` AVM scheme
-submits a fixed group — the facilitator's fee-payer transaction plus an asset
-transfer to `payTo`. There is no slot for an application call. Pointing `payTo`
-at an escrow app means that app receives a bare asset transfer with no method
-call and no idea which request it belongs to.
-
-**The economics invert at this size.** Escrow needs on-chain state per call. A
-box keyed by request id costs roughly `2500 + 400 x (34 + 48)` = **0.035 ALGO**
-of minimum balance, locked until release, to protect a **0.001 USDC** payment —
-about six times the value of the thing being protected, plus two extra app calls
-in fees. A bond is `O(providers)`; escrow is `O(calls)`.
-
-**It recovers but does not deter.** Escrow returns your money and costs the
-cheat nothing beyond a sale it did not make. A 9x slash means breaching the SLA
-on a 0.001 call costs 0.01 — cheating is strictly worse than not serving.
-
-**It reintroduces the judgement problem.** Someone has to decide whether to
-release. If the buyer decides, the buyer can take the data and never confirm. If
-a timeout decides, the provider carries receivables risk on every call. If an
-arbitrator decides, centralised trust is back.
-
-> A bond *is* escrow, amortised. The provider locks collateral once and it
-> covers thousands of calls: the same protection at a ten-thousandth of the
-> on-chain footprint, plus a deterrent escrow cannot produce.
-
-## Why 9x, and not some other number
-
-The slash is `9 x price` on top of a full refund, so one breach costs `10 x` the
-call's revenue. The rule is that **cheating must be worse than not serving at
-all** — at 10x, no volume makes a bad response profitable, while an honest
-provider with a near-zero failure rate pays essentially nothing to be bonded.
-
-That asymmetry is the whole mechanism: the bond is cheap precisely for the
-providers who deserve to be trusted, and ruinous for the ones who do not. It is
-Spence signalling with the cost paid in collateral rather than education.
-
-## Why a blockchain
-
-The organisers said a blockchain is not required, so here is the honest answer:
-
-> The bond has to sit somewhere neither the buyer nor the seller controls. The
-> moment either side holds it, you have replaced a trust problem with a different
-> trust problem. Everything else in Recourse could run on a server. That one
-> thing cannot.
-
-Supporting points, all specific to Algorand:
-
-- **Sub-cent fees** mean disputing a 0.001 USDC call is economically sane. On
-  most chains the dispute costs more than the purchase, so the mechanism is dead
-  on arrival.
-- **~3 s deterministic finality with no reorgs** keeps the claim path fast enough
-  to run inside an agent's request loop.
-- **Inner transactions inside an app call are atomic**, so refund, slash and
-  counter update cannot partially execute.
-- **Box storage** gives per-provider state that scales with the registry instead
-  of fighting a fixed global schema.
-
----
-
-## The demo
-
-Both providers are bonded at 0.1 USDC and priced at 0.001 USDC per call. Both
-publish `max_staleness_s: 60`. A bond of 0.1 covers exactly **10 upheld claims**
-(refund 0.001 + slash 0.009 = 0.01 each).
-
-Open the dashboard and press **Run live demo**:
-
-1. Both providers look identical — bonded, active, **unmeasured**. The score says
-   `low` confidence, not "100% reliable". A provider with one good call is not
-   perfect, it is unmeasured, and a score that cannot say so is worse than none.
-2. The agent **explores** both, because the *bond* — not a reputation neither has
-   yet — is what protects it. This is the part that un-gates new providers.
-3. Provider A's responses pass all six checks. Provider B's fail check 4
-   (staleness) while passing check 6 (signature): a provable violation.
-4. Each violation is claimed on chain. B's bond drains 0.01 at a time, live.
-5. On call ~20, B's tenth claim empties the bond. The exhaustion branch fires,
-   the contract marks it **inactive**, and the routing panel flips: B is
-   excluded and every remaining call goes to A.
-
-**Step 5 is the whole pitch**, so the routing decision is a first-class panel on
-screen, not a line in a log.
-
-```bash
-npm run demo -- --calls 30      # same run, streamed to your terminal
-```
-
----
-
-## Run locally
-
-```bash
-npm install
-npm run accounts          # generates 4 TestNet accounts into .env
-```
-
-Fund the four printed addresses with TestNet ALGO
-([dispenser](https://lora.algokit.io/testnet/fund)), and the **deployer only**
-with TestNet USDC ([Circle faucet](https://faucet.circle.com), choose Algorand
-Testnet — under 1 USDC is enough; setup distributes the rest).
-
-```bash
-npm run contract:deploy   # deploys, funds and opts the app into the asset
-npm run setup             # opt-ins, distribution, registration, bonds
-npm run preflight         # tells you exactly what is still missing
-npm start                 # http://localhost:3000
-```
-
-Run the tests:
-
-```bash
-npm test              # 57 unit tests, no network
-npm run test:chain    # adversarial checks against the deployed contract
-```
-
-Rebuild the contract only if you edit it:
-
-```bash
-pip install puyapy algorand-python
-npm run contract:build
-```
-
-Between rehearsals:
-
-```bash
-npm run topup                                                   # re-stake bonds, check box MBR headroom
-curl -X POST -H "x-admin-key: $ADMIN_KEY" localhost:3000/admin/reset
-```
-
-Prove the contract's guards hold:
-
-```bash
-npm run verify:guards
-```
-
----
-
-## Repo layout
-
-```
-contracts/recourse/contract.py   Algorand Python: registry, bonds, claims
-contracts/build/                 compiled TEAL + ARC-56 (committed)
-src/x402.ts                      facilitator config, paid route definitions
-src/lib/signing.ts               canonical JSON, sha256, ed25519 — one shared impl
-src/lib/chain.ts                 algosdk client, ABI calls, box decoding
-src/lib/recourse-client.ts       score / buy / verify / claim / select
-src/lib/scoring.ts               reliability, confidence, recommendation
-src/agent/runner.ts              the buying agent loop
-src/routes/                      paid, public and admin routes
-public/                          dashboard
-```
-
-## The six checks
-
-Run in order against the SLA the provider committed on chain
-([`src/lib/recourse-client.ts`](src/lib/recourse-client.ts)):
-
-1. HTTP status is 200
-2. Every `required_field` is present
-3. Measured latency is within `max_latency_ms`
-4. `now - data_timestamp` is within `max_staleness_s`
-5. `sha256(canonical_json(data))` equals `response_hash`
-6. `ed25519_verify` passes against the pubkey committed on chain
-
-Check 4 failing while check 6 passes is the claimable case: the provider signed
-it, so it cannot disown it. Check 6 failing is *not* claimable — see Known limits.
-
-The agent resolves the signing key the way an outsider would: it fetches `/sla`,
-hashes the document, and compares against `sla_hash` from the chain. If they
-disagree, the API is serving a different SLA than the one staked against, and
-nothing it says can be trusted.
 
 ## How the score handles "not enough evidence"
 
@@ -608,6 +496,185 @@ rejected, checking the rejection reason rather than accepting any failure:
 It then files one genuine claim that **must** succeed, so a passing run also
 proves the rejections are the guards working rather than the contract being
 broken, and asserts the bond moved by exactly one claim's worth.
+
+## The six checks
+
+Run in order against the SLA the provider committed on chain
+([`src/lib/recourse-client.ts`](src/lib/recourse-client.ts)):
+
+1. HTTP status is 200
+2. Every `required_field` is present
+3. Measured latency is within `max_latency_ms`
+4. `now - data_timestamp` is within `max_staleness_s`
+5. `sha256(canonical_json(data))` equals `response_hash`
+6. `ed25519_verify` passes against the pubkey committed on chain
+
+Check 4 failing while check 6 passes is the claimable case: the provider signed
+it, so it cannot disown it. Check 6 failing is *not* claimable — see Known limits.
+
+The agent resolves the signing key the way an outsider would: it fetches `/sla`,
+hashes the document, and compares against `sla_hash` from the chain. If they
+disagree, the API is serving a different SLA than the one staked against, and
+nothing it says can be trusted.
+
+## Why bonds and not escrow
+
+The intuitive fix for "I paid and got junk" is escrow: hold the buyer's money
+until the response is judged good. It is the right primitive for a $5,000
+milestone and the wrong one here, for four reasons.
+
+**There is nowhere to put it in the protocol.** The x402 `exact` AVM scheme
+submits a fixed group — the facilitator's fee-payer transaction plus an asset
+transfer to `payTo`. There is no slot for an application call. Pointing `payTo`
+at an escrow app means that app receives a bare asset transfer with no method
+call and no idea which request it belongs to.
+
+**The economics invert at this size.** Escrow needs on-chain state per call. A
+box keyed by request id costs roughly `2500 + 400 x (34 + 48)` = **0.035 ALGO**
+of minimum balance, locked until release, to protect a **0.001 USDC** payment —
+about six times the value of the thing being protected, plus two extra app calls
+in fees. A bond is `O(providers)`; escrow is `O(calls)`.
+
+**It recovers but does not deter.** Escrow returns your money and costs the
+cheat nothing beyond a sale it did not make. A 9x slash means breaching the SLA
+on a 0.001 call costs 0.01 — cheating is strictly worse than not serving.
+
+**It reintroduces the judgement problem.** Someone has to decide whether to
+release. If the buyer decides, the buyer can take the data and never confirm. If
+a timeout decides, the provider carries receivables risk on every call. If an
+arbitrator decides, centralised trust is back.
+
+> A bond *is* escrow, amortised. The provider locks collateral once and it
+> covers thousands of calls: the same protection at a ten-thousandth of the
+> on-chain footprint, plus a deterrent escrow cannot produce.
+
+## Why 9x, and not some other number
+
+The slash is `9 x price` on top of a full refund, so one breach costs `10 x` the
+call's revenue. The rule is that **cheating must be worse than not serving at
+all** — at 10x, no volume makes a bad response profitable, while an honest
+provider with a near-zero failure rate pays essentially nothing to be bonded.
+
+That asymmetry is the whole mechanism: the bond is cheap precisely for the
+providers who deserve to be trusted, and ruinous for the ones who do not. It is
+Spence signalling with the cost paid in collateral rather than education.
+
+## Why a blockchain
+
+The organisers said a blockchain is not required, so here is the honest answer:
+
+> The bond has to sit somewhere neither the buyer nor the seller controls. The
+> moment either side holds it, you have replaced a trust problem with a different
+> trust problem. Everything else in Recourse could run on a server. That one
+> thing cannot.
+
+Supporting points, all specific to Algorand:
+
+- **Sub-cent fees** mean disputing a 0.001 USDC call is economically sane. On
+  most chains the dispute costs more than the purchase, so the mechanism is dead
+  on arrival.
+- **~3 s deterministic finality with no reorgs** keeps the claim path fast enough
+  to run inside an agent's request loop.
+- **Inner transactions inside an app call are atomic**, so refund, slash and
+  counter update cannot partially execute.
+- **Box storage** gives per-provider state that scales with the registry instead
+  of fighting a fixed global schema.
+
+---
+
+## The one gap that is still open, and its exact v2
+
+A provider that returns nothing, or returns something unsigned, cannot be
+slashed. There is no artifact to check, so no proof exists. This is the last
+real hole and it is not closable by cryptography — only by a game.
+
+**The design.** An agent opens a dispute naming the provider and the
+`request_id` it paid for. The provider has a fixed window to post a valid
+signed response for that id. Silence slashes; a valid signature does not.
+
+**Why this one needs a claimant deposit when the staleness path does not.** A
+staleness claim is self-proving — the contract can check it from bytes the
+provider signed, so filing a false one is impossible and a deposit would defend
+nothing. Non-delivery is the opposite: the *absence* of evidence is the
+allegation, and nothing stops an agent alleging it about a provider that
+answered perfectly well. So the disputant stakes a deposit, forfeited to the
+provider if a valid signed response appears.
+
+That asymmetry is the whole point. Deposits are friction, and friction belongs
+only where a claim cannot prove itself.
+
+**Why it is not built here.** It needs a dispute lifecycle in the contract, a
+second actor in the demo, and a window long enough to be meaningful but short
+enough to watch. A half-built challenge window is worse than a specified one,
+and this is a hackathon build with a stated scope.
+
+**What would make it stronger still.** If the x402 signed offers and receipts
+extension is available on AVM, the provider's signed offer at 402 time plus the
+absence of a receipt turns "it never answered" into a much more legible claim.
+Worth adopting before building the dispute lifecycle, not after.
+
+## Run locally
+
+```bash
+npm install
+npm run accounts          # generates 4 TestNet accounts into .env
+```
+
+Fund the four printed addresses with TestNet ALGO
+([dispenser](https://lora.algokit.io/testnet/fund)), and the **deployer only**
+with TestNet USDC ([Circle faucet](https://faucet.circle.com), choose Algorand
+Testnet — under 1 USDC is enough; setup distributes the rest).
+
+```bash
+npm run contract:deploy   # deploys, funds and opts the app into the asset
+npm run setup             # opt-ins, distribution, registration, bonds
+npm run preflight         # tells you exactly what is still missing
+npm start                 # http://localhost:3000
+```
+
+Run the tests:
+
+```bash
+npm test              # 57 unit tests, no network
+npm run test:chain    # adversarial checks against the deployed contract
+```
+
+Rebuild the contract only if you edit it:
+
+```bash
+pip install puyapy algorand-python
+npm run contract:build
+```
+
+Between rehearsals:
+
+```bash
+npm run topup                                                   # re-stake bonds, check box MBR headroom
+curl -X POST -H "x-admin-key: $ADMIN_KEY" localhost:3000/admin/reset
+```
+
+Prove the contract's guards hold:
+
+```bash
+npm run verify:guards
+```
+
+---
+
+## Repo layout
+
+```
+contracts/recourse/contract.py   Algorand Python: registry, bonds, claims
+contracts/build/                 compiled TEAL + ARC-56 (committed)
+src/x402.ts                      facilitator config, paid route definitions
+src/lib/signing.ts               canonical JSON, sha256, ed25519 — one shared impl
+src/lib/chain.ts                 algosdk client, ABI calls, box decoding
+src/lib/recourse-client.ts       score / buy / verify / claim / select
+src/lib/scoring.ts               reliability, confidence, recommendation
+src/agent/runner.ts              the buying agent loop
+src/routes/                      paid, public and admin routes
+public/                          dashboard
+```
 
 ## Licence
 
