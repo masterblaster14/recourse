@@ -1,63 +1,48 @@
 {
   "network": "algorand:SGO1GKSzyE7IEPItTxCByw9x8FmnrCDexi9/cOUJOiI=",
-  "app_id": 769678323,
-  "app_address": "YSO4KAV46X733EI7I64PMPP2UYYMZM37C5A36WGOQ2G4EQJFOJQJSWX3UI",
+  "app_id": 769688356,
+  "app_address": "S4V4XZUEFUD5UG2EOKEBLTOZO26LRZU7ZUNNMVLIEP74EDI3WBT4G4WGCM",
   "treasury": "ISOZHGXDZ3ZASAN6N2OJNUHI2KUQYQTS5HVZJICAP7IIG5KQLUHKIKJ4EI",
   "asset_id": 10458941,
   "asset_symbol": "USDC",
   "facilitator": "https://facilitator.goplausible.xyz",
   "provider_registered": {
     "T7X54PQA7EXDPIRKNV3PHQFGXILNG7H7LWHFM4PNWDN2AJOFIHLOUX2Q74": {
-      "txid": "WEOSCGJC7JBICOOSRJIMQ2YXLRDFKSPSHDLNYHLR3UZ575RFQCBQ",
-      "at": "2026-08-22T14:21:55.873701+00:00",
+      "txid": "FJXMMJOI6UU67KSIK2F3GSMEXOUHGJPOYMFET3YFXE3DNPOHD3YQ",
+      "at": "2026-08-22T18:21:04.659Z",
       "note": "Acme Price Feed published its SLA on chain"
     },
     "43YQYEJMOBYEQOU7KDEIZ6SVTYS4FFRTMROHJOTNPG6OH3VXPUFGPYPN6E": {
-      "txid": "75ONEEMRSFKR4LELCGV3J2XAPN66JIK46VACV33ONKVUZ26DAMEQ",
-      "at": "2026-08-22T14:21:55.873701+00:00",
+      "txid": "APD3KOGPB4HBTLDWL3NEGJEZHTPJCYO2BIJ2ERTPO5DNVIJBKAKQ",
+      "at": "2026-08-22T18:21:10.079Z",
       "note": "Northwind Oracle published its SLA on chain"
     }
   },
   "bond_deposited": {
     "T7X54PQA7EXDPIRKNV3PHQFGXILNG7H7LWHFM4PNWDN2AJOFIHLOUX2Q74": {
-      "txid": "XZCQRZQEHSZAWU4A77ETWXL2AKIQRO5ON6GMIZPRZXPN6QTVRNEA",
-      "at": "2026-08-22T14:21:55.873701+00:00",
+      "txid": "DPRBA3CUEVS6UQWRNRHEXZDJD7YJY73ERPDX37JBQCTTCOSUWRMQ",
+      "at": "2026-08-22T18:21:15.435Z",
       "note": "Acme Price Feed staked 0.1 USDC"
     },
     "43YQYEJMOBYEQOU7KDEIZ6SVTYS4FFRTMROHJOTNPG6OH3VXPUFGPYPN6E": {
-      "txid": "P7MZGEXGUH2HM2QDU2I3HTKHEVVE35TN4DRYLHVCBEOW7MJ437OA",
-      "at": "2026-08-22T14:21:55.873701+00:00",
+      "txid": "QE7BUFCUONQHHURDY4I3G6DUFAUHWND3A2LBFGAMNUHSWQ56HEUQ",
+      "at": "2026-08-22T18:21:20.844Z",
       "note": "Northwind Oracle staked 0.1 USDC"
     }
   },
   "app_created": {
-    "txid": "MOU4VA5A66OQRG7H7EBO647DLYKBZ5QAU4WPW2G43FPMPIYG5VDQ",
-    "at": "2026-08-22T14:21:55.873701+00:00",
-    "note": "Recourse registry created, bonds held in USDC"
+    "txid": "MNBW33DMHWIRIQMSXWGSU362CPUZUJPQCRMDQRR4HSQRT2MVHHFQ",
+    "at": "2026-08-22T18:20:18.751Z",
+    "note": "Recourse registry created, bonds held in asset 10458941"
   },
   "app_funded": {
-    "txid": "66EHTWATLYAHLKKQFKGLNYZ4XQL5B3PJVWBX5KGROKWZJZQGJBHQ",
-    "at": "2026-08-22T14:21:55.873701+00:00",
+    "txid": "5PYKDRPQ7E2HWSBRDKABTJGYSVZLKI23EO65ZBJ72XNIHFKQ5DHQ",
+    "at": "2026-08-22T18:20:24.030Z",
     "note": "app account funded for box MBR and payouts"
   },
   "app_opt_in": {
-    "txid": "HBEP2NFP4RPJMB337URZQPD3HOJP7RQ55JCGWNHBZNN7TFVZHK4A",
-    "at": "2026-08-22T14:21:55.873701+00:00",
+    "txid": "I3B7IO74MCTDAYV4KN44XHNCWLFBGLCTIQ4HFGXYUN4I3RLMKYKQ",
+    "at": "2026-08-22T18:20:29.445Z",
     "note": "app opted into USDC so it can custody bonds"
-  },
-  "x402_payment": {
-    "txid": "UY4BZN7TZ2OIVFJW3HEJB5AWLLCOXGRDN5F5RXE7ASGKVHSIWV4Q",
-    "at": "2026-08-22T14:22:15.667Z",
-    "note": "agent bought /score for Acme Price Feed — opening survey"
-  },
-  "claim_upheld": {
-    "txid": "NWHX25NH64HYXQIGCG4U67NFWBEK2KP4CKRKMHWSQSP4CZQVTANA",
-    "at": "2026-08-22T14:22:37.685Z",
-    "note": "Northwind Oracle signed data 2704s old against a 60s SLA: refund + slash from bond"
-  },
-  "record_success": {
-    "txid": "DMJX6DM54SHAMUBNIWJPQL3N3CV6JJTA6Y5JCVBRMA2HYOAQYBSA",
-    "at": "2026-08-22T14:23:14.950Z",
-    "note": "3 verified good responses attested on chain"
   }
 }
