@@ -82,7 +82,8 @@ describe("uint64BE", () => {
   test("encodes big-endian in 8 bytes, matching the AVM itob", () => {
     assert.equal(uint64BE(0).toString("hex"), "0000000000000000");
     assert.equal(uint64BE(1).toString("hex"), "0000000000000001");
-    assert.equal(uint64BE(1755880000).toString("hex"), "0000000068a7cf00");
+    assert.equal(uint64BE(1755880000).toString("hex"), "0000000068a89a40");
+    assert.equal(Number(BigInt("0x68a89a40")), 1755880000);
   });
 });
 

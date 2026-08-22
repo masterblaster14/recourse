@@ -22,7 +22,9 @@
     "topup": "tsx src/scripts/topup.ts",
     "readme": "tsx src/scripts/readme-proof.ts",
     "sweep": "tsx src/scripts/sweep.ts",
-    "verify:guards": "tsx src/scripts/verify-guards.ts"
+    "verify:guards": "tsx src/scripts/verify-guards.ts",
+    "test": "tsx --test tests/*.test.ts",
+    "test:chain": "tsx src/scripts/verify-guards.ts"
   },
   "dependencies": {
     "@hono/node-server": "^1.19.9",
