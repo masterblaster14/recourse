@@ -128,6 +128,25 @@ export function capConfidenceByCounterparties(
   return confidence;
 }
 
+/**
+ * Findings decisive enough that "not enough evidence" would be a false answer.
+ *
+ * An upheld claim is proof. A conclusive disagreement with the rest of the
+ * market about a moment the provider itself named is not proof — it never
+ * touches the bond — but it is not an absence of information either, and
+ * reporting it as `unrated` would tell an agent we know nothing about a
+ * provider we have measured and found to be lying about time.
+ *
+ * Shared by computeScore and buildScoreRecord because both decide a
+ * recommendation, and having only one of them apply it is exactly the bug that
+ * left a detected forger reading `unrated` on the dashboard.
+ */
+export function decisiveViolations(agg: SampleAggregate): number {
+  const c = agg.consistency;
+  const consistencyRate = c && c.checked > 0 ? c.consistent / c.checked : 1;
+  return agg.upheldClaims + (c?.conclusive && consistencyRate < 0.5 ? 1 : 0);
+}
+
 export function computeScore(agg: SampleAggregate): Score {
   const base =
     WEIGHTS.schema * agg.schemaPassRate +
@@ -167,9 +186,7 @@ export function computeScore(agg: SampleAggregate): Score {
     confidence,
     recommendation: recommendationFor(lowerBound, confidence, {
       samples: agg.samples,
-      // A conclusive consistency failure is as decisive as an upheld claim: it
-      // must not be waved through as "not enough evidence yet".
-      upheldClaims: agg.upheldClaims + (c?.conclusive && consistencyRate < 0.5 ? 1 : 0),
+      upheldClaims: decisiveViolations(agg),
     }),
     breakdown: {
       schema: round4(agg.schemaPassRate),
@@ -331,7 +348,7 @@ export function buildScoreRecord(args: {
     confidence,
     recommendation: recommendationFor(score.reliabilityLower, confidence, {
       samples: agg.samples,
-      upheldClaims: agg.upheldClaims,
+      upheldClaims: decisiveViolations(agg),
     }),
     as_of: new Date().toISOString(),
   };

@@ -7,6 +7,7 @@ import assert from "node:assert/strict";
 import {
   computeScore,
   confidenceFor,
+  decisiveViolations,
   coverageCalls,
   recommendationFor,
   wilsonInterval,
@@ -153,5 +154,64 @@ describe("coverageCalls", () => {
 
   test("a zero price cannot divide by zero", () => {
     assert.equal(coverageCalls(100_000, 0), 0);
+  });
+});
+
+/**
+ * A detected forger must not be reported as "unrated".
+ *
+ * `unrated` means "not enough evidence to say anything", and it exists so a
+ * brand-new honest provider is not treated as though it had been caught. A
+ * provider that conclusively disagrees with the rest of the market about a
+ * moment it named itself is the opposite case: we have measured it and found
+ * it lying about time. Reporting that as an absence of information would hand
+ * an agent exactly the wrong conclusion.
+ *
+ * This regressed once already. `computeScore` applied the adjustment and
+ * `buildScoreRecord` — which recomputes the recommendation against a
+ * counterparty-capped confidence — did not, so a forger with reliability
+ * crushed to zero still displayed as `unrated`. Both now share
+ * `decisiveViolations`, and these tests hold both ends.
+ */
+describe("a conclusive market divergence is evidence, not silence", () => {
+  const agg = (over: Partial<SampleAggregate> = {}): SampleAggregate => ({
+    samples: 6, passes: 6, effectiveSamples: 6, weightedPassRate: 1,
+    recentSamples: 6, schemaPassRate: 1, stalenessPassRate: 1, latencyPassRate: 1,
+    sigPassRate: 1, p95LatencyMs: 100, upheldClaims: 0, ...over,
+  });
+
+  const divergent = { checked: 6, consistent: 0, medianDivergence: 0.0113, conclusive: true };
+  const agreeing = { checked: 6, consistent: 6, medianDivergence: 0.0007, conclusive: true };
+
+  test("counts a conclusive divergence alongside proven claims", () => {
+    assert.equal(decisiveViolations(agg({ consistency: divergent })), 1);
+  });
+
+  test("a provider agreeing with the market is not penalised", () => {
+    assert.equal(decisiveViolations(agg({ consistency: agreeing })), 0);
+  });
+
+  test("an inconclusive divergence stays silent — too little evidence to act", () => {
+    const early = { checked: 2, consistent: 0, medianDivergence: 0.02, conclusive: false };
+    assert.equal(decisiveViolations(agg({ consistency: early })), 0);
+  });
+
+  test("it adds to real claims rather than replacing them", () => {
+    assert.equal(decisiveViolations(agg({ upheldClaims: 3, consistency: divergent })), 4);
+  });
+
+  test("the forger does not read as unrated, despite low confidence", () => {
+    // Six samples is "low" confidence, which is normally an automatic unrated.
+    const s = computeScore(agg({ consistency: divergent }));
+    assert.equal(s.confidence, "low");
+    assert.notEqual(s.recommendation, "unrated",
+      "a measured forger must not be reported as unmeasured");
+    assert.equal(s.recommendation, "avoid");
+  });
+
+  test("an honest provider with the same sample count still reads unrated", () => {
+    const s = computeScore(agg({ consistency: agreeing }));
+    assert.equal(s.recommendation, "unrated",
+      "thin evidence about an honest provider must stay unrated, not avoid");
   });
 });
