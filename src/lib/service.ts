@@ -44,12 +44,17 @@ export async function scoreFor(
   const all = await store().allSamples(SCORE_WINDOW_HOURS);
   agg.consistency = computeConsistency(all).get(address);
 
+  // Who has actually paid this provider, so the score can say how broad the
+  // evidence is rather than only how much of it there is.
+  const counterparties = await store().counterparties(address);
+
   const record = buildScoreRecord({
     label: known?.label ?? row?.label ?? "Unknown provider",
     endpoint: known?.endpoint ?? row?.endpoint ?? "",
     onchain,
     agg,
     appId: env.appId,
+    counterparties,
   });
 
   cache.set(address, { at: Date.now(), value: record });
@@ -88,6 +93,10 @@ export type ProviderSummary = {
   /** Median disagreement with the rest of the market, as a fraction. */
   divergence: number | null;
   divergence_conclusive: boolean;
+  /** Distinct paying counterparties, self-payments excluded. */
+  distinct_payers: number;
+  /** True while every observation traces back to one payer. Caps confidence. */
+  single_source: boolean;
 };
 
 export async function providerDirectory(): Promise<ProviderSummary[]> {
@@ -114,6 +123,8 @@ export async function providerDirectory(): Promise<ProviderSummary[]> {
       claims: s?.onchain.claim_count ?? 0,
       divergence: s?.observed.price_divergence ?? null,
       divergence_conclusive: s?.observed.divergence_conclusive ?? false,
+      distinct_payers: s?.counterparties.distinct_payers ?? 0,
+      single_source: s?.counterparties.single_source ?? true,
     });
   }
   return out;

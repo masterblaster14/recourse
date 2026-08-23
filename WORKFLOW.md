@@ -285,6 +285,19 @@ evidence, and conflating them is how new providers get frozen out.
 its *bond* — not a reputation it cannot yet have — is what protects the buyer. A
 thin bond buys proportionally less rope.
 
+**Volume is not evidence — counterparties are.** A provider can pay itself all
+day, and on a public chain that costs it only fees. So self-payments are
+excluded outright rather than discounted, and confidence is capped at `medium`
+while every observation traces back to a single payer.
+
+That cap is deliberately not a penalty. A brand-new honest provider has exactly
+one customer; so does one quietly paying itself. A score penalty cannot tell
+them apart and would hit the honest one hardest — the incumbent-protecting
+behaviour this project exists to remove. Declining to claim *high* confidence
+says the true thing, that our evidence is narrow, without pretending to know
+which case it is. `medium` still permits a `buy`, so a thin market is never a
+barrier to traffic.
+
 **Evidence and proof do different things:**
 
 | | Source | Consequence |

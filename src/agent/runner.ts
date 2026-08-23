@@ -243,6 +243,7 @@ export async function runDemo(opts: DemoOptions = {}): Promise<DemoSummary> {
           type: "pay", at: now(), runId, index: i,
           provider: chosen.provider, label: chosen.label,
           resource: endpoint, amountMicro: 0, txid: null, settled: false,
+          refused: true, refusedReason: result.error,
         });
       }
       const settledTx = result.settlement?.transaction ?? null;
@@ -269,6 +270,9 @@ export async function runDemo(opts: DemoOptions = {}): Promise<DemoSummary> {
         provider: chosen.provider, label: chosen.label,
         resource: endpoint, amountMicro: chosen.price_micro,
         txid: settledTx, settled: Boolean(settledTx),
+        latencyMs: result.latencyMs,
+        settlementVerified: result.settlementCheck?.verified,
+        settlementReason: result.settlementCheck?.reason,
       });
 
       // ---- 4. verify against the SLA the provider committed to on chain

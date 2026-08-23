@@ -89,6 +89,57 @@ export type SampleAggregate = {
   };
 };
 
+/**
+ * Who has actually paid this provider.
+ *
+ * Reputation built on volume is trivially forged: a provider can pay itself all
+ * day. Counting *distinct counterparties* instead is what makes the number cost
+ * something, because each new counterparty is somebody the provider does not
+ * control.
+ *
+ * Self-payments are excluded outright rather than discounted. A provider buying
+ * from itself is not weak evidence of quality, it is no evidence at all, and
+ * averaging it in would let a determined seller dilute its way to a reputation.
+ */
+export type CounterpartyStats = {
+  /** Distinct payers, excluding the provider paying itself. */
+  distinctPayers: number;
+  /** Settled payments observed, excluding self-payments. */
+  observedPayments: number;
+  /** Payments where payer == provider. Counted, reported, never scored. */
+  selfPayments: number;
+  /** Share of observed payments from the single largest payer, 0..1. */
+  topPayerShare: number;
+};
+
+export function emptyCounterparties(): CounterpartyStats {
+  return { distinctPayers: 0, observedPayments: 0, selfPayments: 0, topPayerShare: 0 };
+}
+
+/** Rolls a provider's payment rows into counterparty statistics. */
+export function counterpartyStats(rows: { provider: string; payer: string }[], provider: string): CounterpartyStats {
+  const byPayer = new Map<string, number>();
+  let selfPayments = 0;
+
+  for (const r of rows) {
+    if (r.provider !== provider) continue;
+    if (r.payer === provider) { selfPayments++; continue; }
+    // An unattributable settlement cannot be shown to be a distinct party, so
+    // it is not allowed to look like one.
+    if (!r.payer || r.payer === "unknown") continue;
+    byPayer.set(r.payer, (byPayer.get(r.payer) ?? 0) + 1);
+  }
+
+  const counts = [...byPayer.values()];
+  const observedPayments = counts.reduce((a, b) => a + b, 0);
+  return {
+    distinctPayers: byPayer.size,
+    observedPayments,
+    selfPayments,
+    topPayerShare: observedPayments === 0 ? 0 : Math.max(...counts) / observedPayments,
+  };
+}
+
 export interface Store {
   init(): Promise<void>;
   kind: "postgres" | "memory";
@@ -106,6 +157,8 @@ export interface Store {
   listClaims(limit: number): Promise<ClaimRow[]>;
   listPayments(limit: number): Promise<PaymentRow[]>;
   countPayments(): Promise<{ count: number; totalMicro: number }>;
+  /** Distinct paying counterparties for one provider. See CounterpartyStats. */
+  counterparties(provider: string): Promise<CounterpartyStats>;
   reset(): Promise<void>;
 }
 
@@ -289,6 +342,9 @@ class MemoryStore implements Store {
       totalMicro: this.payments.reduce((a, p) => a + p.amount_micro, 0),
     };
   }
+  async counterparties(provider: string): Promise<CounterpartyStats> {
+    return counterpartyStats(this.payments, provider);
+  }
   async reset(): Promise<void> {
     this.samples = [];
     this.claims = [];
@@ -413,6 +469,32 @@ class PostgresStore implements Store {
       "SELECT count(*)::int AS n, COALESCE(sum(amount_micro),0)::bigint AS total FROM payments",
     );
     return { count: r.rows[0]?.n ?? 0, totalMicro: Number(r.rows[0]?.total ?? 0) };
+  }
+
+  async counterparties(provider: string): Promise<CounterpartyStats> {
+    // Grouped in the database rather than pulled into memory: the payments
+    // table grows with every settled call, including strangers' calls.
+    const r = await this.pool.query(
+      `SELECT payer, count(*)::int AS n
+         FROM payments
+        WHERE provider = $1
+          AND payer IS NOT NULL AND payer <> '' AND payer <> 'unknown'
+          AND payer <> provider
+        GROUP BY payer`,
+      [provider],
+    );
+    const self = await this.pool.query(
+      "SELECT count(*)::int AS n FROM payments WHERE provider = $1 AND payer = provider",
+      [provider],
+    );
+    const counts = (r.rows as { n: number }[]).map(x => x.n);
+    const observedPayments = counts.reduce((a, b) => a + b, 0);
+    return {
+      distinctPayers: counts.length,
+      observedPayments,
+      selfPayments: self.rows[0]?.n ?? 0,
+      topPayerShare: observedPayments === 0 ? 0 : Math.max(...counts) / observedPayments,
+    };
   }
 
   async reset(): Promise<void> {

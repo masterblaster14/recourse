@@ -80,7 +80,7 @@ Algorand Python (`algopy`), compiled to TEAL, deployed to TestNet.
 | ✅ | Bond coverage | `coverage_calls` — how many failures the collateral can actually pay for |
 | ✅ | **Cross-provider price consistency** | Catches a forger that passes every cryptographic check |
 | ✅ | Evidence never slashes | Statistical findings cap the score; only proof takes collateral |
-| ⬜ | Counterparty-weighted reputation | Distinct payers, not raw success counts — hardens against self-dealing |
+| ✅ | **Counterparty-weighted reputation** | Distinct payers, not raw volume. Self-payments excluded outright; confidence capped at `medium` while every observation traces to one payer |
 | ❌ | Data-correctness verification | Impossible without an external reference; scoped out explicitly |
 
 ## 5. The market view
@@ -96,6 +96,7 @@ Algorand Python (`algopy`), compiled to TEAL, deployed to TestNet.
 | | Feature | Notes |
 |:--:|---|---|
 | ✅ | Live dashboard | Routing panel, draining bonds, claim ledger, market view, SSE feed |
+| ✅ | **Live workflow panel** | All seven stages of one purchase filled in as they happen — refusals, settlement confirmation and slashing each shown where they occur, so the system can be explained by pointing at it |
 | ✅ | One-button live demo | Starts the real agent making real payments |
 | ✅ | Evidence ledger | `/proof`, backfilled from the database so a restart cannot erase it |
 | ✅ | Terminal demo | Same story with no UI, as a fallback |
@@ -109,7 +110,7 @@ Algorand Python (`algopy`), compiled to TEAL, deployed to TestNet.
 
 | | Feature | Notes |
 |:--:|---|---|
-| ✅ | 118 unit tests | Signing, scoring, routing, box decoding, consistency, payee refusal, spend policy, resource binding, canonicalisation interop |
+| ✅ | 136 unit tests | Signing, scoring, routing, box decoding, consistency, payee refusal, spend policy, resource binding, canonicalisation interop |
 | ✅ | 9 on-chain guard checks | Adversarial, against the deployed contract |
 | ✅ | Refusal-path testing | Tests assert what is *rejected*, not only what works |
 | ✅ | **Published-attack audit** | All five attacks from the x402 formal analysis checked against this code — see [SECURITY.md](SECURITY.md) |
@@ -140,6 +141,6 @@ posture asserted.
 2. **Forged freshness is detected, not punished.** Slashing on a statistic would be the centralised adjudication this project exists to remove.
 3. **The guarantee is capped at the live bond.** Insurance can be insolvent.
 4. **Sybil reset is cheap.** Reputation is per address; a drained provider can start over.
-5. **All four demo providers are ours.** The ecosystem view reframes it against 298 real unbonded endpoints, but does not remove it.
-6. **Observed samples are only ours** and unverifiable by third parties.
+5. **All four demo providers are ours.** The ecosystem view reframes it against ~296 real unbonded endpoints, but does not remove it. A fifth provider is registered by an unrelated wallet that self-enrolled through the CLI — it holds a real bond and publishes its own terms, which is why `/registry` reports five while the dashboard shows the four demo endpoints.
+6. **Observed samples are only ours.** Now surfaced by the product rather than only admitted here: every provider reads `single source — confidence capped`, and no provider can reach `high` confidence until a second independent payer appears.
 7. **Operational:** single region, no rate limiting, creator is a single hot key.

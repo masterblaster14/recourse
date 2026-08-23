@@ -85,6 +85,82 @@
     <!-- ------------------------------------------------------- main column -->
     <div>
 
+      <!-- live workflow -------------------------------------------------- -->
+      <div class="card" id="flow-card">
+        <div class="card-head">
+          <div>
+            <h2>What the agent is doing</h2>
+            <div class="sub">Every stage of one purchase, as it happens — no human in any of them</div>
+          </div>
+          <div class="sub" id="flow-call"></div>
+        </div>
+        <div class="card-body">
+          <ol class="flow" id="flow">
+            <li class="step" data-step="survey">
+              <span class="n">1</span>
+              <div class="body">
+                <div class="t">Buy the risk data</div>
+                <div class="d">Pays for a reliability record on every candidate <em>before</em> spending anything on data</div>
+              </div>
+              <span class="v"></span>
+            </li>
+            <li class="step" data-step="route">
+              <span class="n">2</span>
+              <div class="body">
+                <div class="t">Choose who to pay</div>
+                <div class="d">Weighs reliability against collateral. A drained provider is dropped from routing entirely</div>
+              </div>
+              <span class="v"></span>
+            </li>
+            <li class="step" data-step="policy">
+              <span class="n">3</span>
+              <div class="body">
+                <div class="t">Check the bill before paying it</div>
+                <div class="d">The 402 must name the payee whose bond was checked, the right asset, network and price — or no transaction is built at all</div>
+              </div>
+              <span class="v"></span>
+            </li>
+            <li class="step" data-step="pay">
+              <span class="n">4</span>
+              <div class="body">
+                <div class="t">Pay over x402</div>
+                <div class="d">A real asset transfer on Algorand, settled through the GoPlausible facilitator</div>
+              </div>
+              <span class="v"></span>
+            </li>
+            <li class="step" data-step="settle">
+              <span class="n">5</span>
+              <div class="body">
+                <div class="t">Confirm the money actually moved</div>
+                <div class="d">Looks the transaction up on chain itself — right asset, right amount, from us, to them. The facilitator is not taken at its word</div>
+              </div>
+              <span class="v"></span>
+            </li>
+            <li class="step" data-step="verify">
+              <span class="n">6</span>
+              <div class="body">
+                <div class="t">Check what came back</div>
+                <div class="d">Six checks against the SLA the provider committed to on chain</div>
+                <div class="chips" id="flow-checks"></div>
+              </div>
+              <span class="v"></span>
+            </li>
+            <li class="step" data-step="claim">
+              <span class="n">7</span>
+              <div class="body">
+                <div class="t">Take the money back</div>
+                <div class="d">A signed response that breaks its own SLA is proof. The contract refunds the buyer and slashes the seller in one atomic call</div>
+              </div>
+              <span class="v"></span>
+            </li>
+          </ol>
+          <div class="note" id="flow-note">
+            Press <b>Start the agent</b> and this fills in live. Stage 7 only fires when a
+            provider is caught — and when it does, the money moves on chain in front of you.
+          </div>
+        </div>
+      </div>
+
       <!-- routing ------------------------------------------------------- -->
       <div class="card" id="routing">
         <div class="route-banner" id="route-banner">

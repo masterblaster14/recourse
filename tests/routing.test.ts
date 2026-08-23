@@ -21,6 +21,10 @@ function provider(over: Partial<ScoreRecord> & { provider: string }): ScoreRecor
     bond: 0.1,
     coverage_calls: 10,
     active: true,
+    counterparties: {
+      distinct_payers: 1, observed_payments: 0, self_payments: 0,
+      top_payer_share: 0, single_source: true,
+    },
     sla: { max_staleness_s: 60, max_latency_ms: 8000, sla_hash: "0x00", required_fields: [] },
     observed: {
       samples: 0, passes: 0, window: "24h", recent_samples_6h: 0, p95_latency_ms: 100,

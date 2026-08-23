@@ -123,6 +123,15 @@ function renderProviders(list) {
           <span>${p.recommendation === "unrated" ? "not yet conclusive" : "95% lower bound"} · ${p.confidence} confidence</span>
           <b>${p.samples ? `≥${low}%` : "—"}</b>
         </div>
+        ${p.samples ? `
+        <div class="metric-row" style="font-size:11px;margin-top:4px">
+          <span title="Confidence is capped at medium while every observation comes from one payer. A thousand calls from a single counterparty is one relationship observed a thousand times, not a thousand independent observations.">${
+            p.single_source
+              ? "single source — confidence capped"
+              : `${p.distinct_payers} independent payers`
+          }</span>
+          <b>${p.distinct_payers}</b>
+        </div>` : ""}
 
         ${p.divergence !== null && p.divergence !== undefined ? `
         <div class="metric-row" style="font-size:11px;margin-top:6px">
@@ -268,10 +277,41 @@ function handle(ev) {
     case "pay":          onPay(ev); break;
     case "verify":       onVerify(ev); break;
     case "claim":        onClaim(ev); break;
-    case "claim:error":  feed("fail", "Claim rejected", ev.message); break;
+    case "claim:error":
+      flowSet("claim", "bad", `rejected<br><span style="opacity:.75">${ev.message}</span>`);
+      feed("fail", "Claim rejected", ev.message);
+      break;
     case "provider:update": loadProviders(); break;
     case "log":          if (ev.level !== "info" || /switch|routing|record|complete/i.test(ev.message)) feed("info", ev.message); break;
   }
+}
+
+/* ----------------------------------------------------------- flow panel ---- */
+
+/**
+ * The live workflow. One purchase at a time, so a viewer can follow a single
+ * story rather than watch seven stages of forty calls interleave.
+ *
+ * Stages are never hidden, only dimmed — someone reading mid-run should be able
+ * to see what is about to happen, not just what already did.
+ */
+const flowStep = name => document.querySelector(`.flow .step[data-step="${name}"]`);
+
+/** Passing no value keeps whatever the stage already showed, so advancing a
+ *  stage from active to done does not erase what it told the reader. */
+function flowSet(name, state, value) {
+  const el = flowStep(name);
+  if (!el) return;
+  el.classList.remove("done", "active", "bad", "skip");
+  if (state) el.classList.add(state);
+  if (value !== undefined) el.querySelector(".v").innerHTML = value;
+}
+
+function flowReset() {
+  for (const name of ["survey", "route", "policy", "pay", "settle", "verify", "claim"]) {
+    flowSet(name, null, "");
+  }
+  $("flow-checks").innerHTML = "";
 }
 
 function onDemoStart(ev) {
@@ -281,10 +321,18 @@ function onDemoStart(ev) {
   $("routing").className = "card";
   renderStats();
   setRunning(true);
+  flowReset();
+  flowSet("survey", "active", "buying risk records…");
+  $("flow-note").textContent =
+    "Live. Each stage fills in as it happens; stage 7 only fires when a provider is caught.";
   feed("info", `Agent starting ${ev.calls} x402 calls on Algorand TestNet`);
 }
 
 function onDemoEnd(ev) {
+  $("flow-call").textContent = `finished — ${ev.summary.calls ?? state.run.total} calls`;
+  $("flow-note").innerHTML =
+    `Run complete. <b>${ev.summary.paid}</b> paid, <b>${ev.summary.passed}</b> verified good, ` +
+    `<b>${ev.summary.failed}</b> violations, <b>${ev.summary.claims}</b> settled out of a provider's bond.`;
   setRunning(false);
   $("progress").style.width = "100%";
   const s = ev.summary;
@@ -295,6 +343,19 @@ function onDemoEnd(ev) {
 
 function onRoute(ev) {
   state.run.calls = ev.index;
+  // A new call begins: stage 1 is settled history, everything after it is fresh.
+  $("flow-call").textContent = `call ${ev.index} of ${state.run.total}`;
+  flowSet("survey", "done",
+    `${ev.candidates.length} risk record${ev.candidates.length === 1 ? "" : "s"} bought`);
+  const excluded = ev.candidates.filter(c => !c.eligible).length;
+  flowSet("route", "active",
+    `${ev.chosenLabel}${excluded ? `<br><span style="opacity:.7">${excluded} excluded</span>` : ""}`);
+  flowSet("policy", null, "");
+  flowSet("pay", null, "");
+  flowSet("settle", null, "");
+  flowSet("verify", null, "");
+  flowSet("claim", null, "");
+  $("flow-checks").innerHTML = "";
   $("progress").style.width = `${Math.min(100, (ev.index / Math.max(1, state.run.total)) * 100)}%`;
   $("route-note").style.display = "flex";
   $("route-idx").textContent = ev.index;
@@ -329,6 +390,38 @@ function onRoute(ev) {
 }
 
 function onPay(ev) {
+  // Stage 3: the agent read the 402 before building anything. A refusal here is
+  // the control working, so it is shown as a red stop rather than a failure.
+  if (ev.refused) {
+    flowSet("route", "done");
+    flowSet("policy", "bad", `refused<br><span style="opacity:.75">${ev.refusedReason || "402 did not match"}</span>`);
+    flowSet("pay", "skip", "no transaction built");
+    flowSet("settle", "skip", "—");
+    return;
+  }
+  flowSet("route", "done");
+  flowSet("policy", "done", "payee · asset · network · price ✓");
+
+  if (ev.settled) {
+    flowSet("pay", "done",
+      `${fmt(micro(ev.amountMicro))} ${state.asset}` +
+      (ev.latencyMs ? `<br><span style="opacity:.7">${(ev.latencyMs / 1000).toFixed(1)}s</span>` : "") +
+      (ev.txid ? `<br><a href="${txLink(ev.txid)}" target="_blank" rel="noopener">${short(ev.txid, 8)}</a>` : ""));
+    // Stage 5 is the one that matters: the facilitator said it settled, and the
+    // agent went and looked.
+    if (ev.settlementVerified === true) {
+      flowSet("settle", "done", "confirmed on chain ✓");
+    } else if (ev.settlementVerified === false) {
+      flowSet("settle", "bad", `unconfirmed<br><span style="opacity:.75">${ev.settlementReason || ""}</span>`);
+    } else {
+      flowSet("settle", "skip", "not checked");
+    }
+    flowSet("verify", "active", "running six checks…");
+  } else {
+    flowSet("pay", "bad", "did not settle");
+    flowSet("settle", "skip", "—");
+  }
+
   if (ev.settled) {
     state.run.paid++;
     state.run.spent += ev.amountMicro;
@@ -343,6 +436,17 @@ function onPay(ev) {
 function onVerify(ev) {
   if (ev.pass) state.run.pass++; else state.run.fail++;
   renderStats();
+
+  const failed = ev.checks.filter(c => !c.pass);
+  flowSet("verify", ev.pass ? "done" : "bad",
+    ev.pass ? `${ev.checks.length}/${ev.checks.length} passed`
+            : `${failed.map(c => c.name).join(", ")}`);
+  $("flow-checks").innerHTML =
+    ev.checks.map(c => `<span class="chk ${c.pass ? "ok" : "no"}">${c.name}</span>`).join("");
+  // A pass means stage 7 is deliberately not reached, which is the good
+  // outcome — say so rather than leaving it blank and ambiguous.
+  if (ev.pass) flowSet("claim", "skip", "nothing to claim");
+  else flowSet("claim", "active", "filing proof on chain…");
   const chips = ev.checks.map(c => `<span class="chk ${c.pass ? "ok" : "no"}">${c.name}</span>`).join("");
   const timing = `${(ev.latencyMs / 1000).toFixed(1)}s paid request incl. settlement · ${(ev.totalMs / 1000).toFixed(1)}s full exchange`;
   const detail = ev.pass
@@ -353,6 +457,9 @@ function onVerify(ev) {
 }
 
 function onClaim(ev) {
+  flowSet("claim", "done",
+    `+${fmt(micro(ev.refundMicro))} refund<br>−${fmt(micro(ev.slashMicro))} slashed` +
+    `<br><a href="${txLink(ev.txid)}" target="_blank" rel="noopener">${short(ev.txid, 8)}</a>`);
   state.run.claims++;
   state.run.refund += ev.refundMicro;
   state.run.slash += ev.slashMicro;

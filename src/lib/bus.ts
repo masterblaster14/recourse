@@ -13,7 +13,13 @@ export type RecourseEvent =
   | { type: "route"; at: string; runId: string; index: number; chosen: string;
       chosenLabel: string; reason: string; candidates: RouteCandidate[] }
   | { type: "pay"; at: string; runId: string; index: number; provider: string; label: string;
-      resource: string; amountMicro: number; txid: string | null; settled: boolean }
+      resource: string; amountMicro: number; txid: string | null; settled: boolean;
+      /** Whether the agent refused to pay after reading the 402, and why. */
+      refused?: boolean; refusedReason?: string;
+      /** Independent on-chain confirmation of the facilitator's reported txid. */
+      settlementVerified?: boolean; settlementReason?: string;
+      /** Round trip for the paid request, settlement included. */
+      latencyMs?: number }
   | { type: "verify"; at: string; runId: string; index: number; provider: string; label: string;
       pass: boolean; checks: CheckResult[]; latencyMs: number; totalMs: number; staleS: number }
   | { type: "claim"; at: string; runId: string; provider: string; label: string;

@@ -7,7 +7,7 @@
  * score is worse than useless — it actively misleads the agent buying from it.
  */
 import { env, fromMicro } from "../env.ts";
-import type { SampleAggregate } from "./db.ts";
+import { emptyCounterparties, type CounterpartyStats, type SampleAggregate } from "./db.ts";
 import type { ProviderState } from "./chain.ts";
 
 export type Confidence = "low" | "medium" | "high";
@@ -103,6 +103,31 @@ export function recommendationFor(
   return "avoid";
 }
 
+/**
+ * Narrow the confidence when every observation traces back to one payer.
+ *
+ * Confidence answers "how much do we know", and a thousand calls from a single
+ * counterparty is one relationship observed a thousand times, not a thousand
+ * independent observations. The statistics cannot see that — the interval only
+ * knows how many trials there were, not who ran them.
+ *
+ * This caps rather than penalises, and the distinction is the whole design. A
+ * brand-new provider legitimately has one customer; so does a provider quietly
+ * paying itself. Docking the score would punish both, and the honest one is
+ * exactly who this project exists to let in. Declining to claim *high*
+ * confidence says the true thing — our evidence is narrow — without pretending
+ * to know which of the two we are looking at.
+ *
+ * `medium` still permits a `buy`, so a thin market is not a barrier to traffic.
+ */
+export function capConfidenceByCounterparties(
+  confidence: Confidence,
+  counterparties: { distinctPayers: number },
+): Confidence {
+  if (confidence === "high" && counterparties.distinctPayers <= 1) return "medium";
+  return confidence;
+}
+
 export function computeScore(agg: SampleAggregate): Score {
   const base =
     WEIGHTS.schema * agg.schemaPassRate +
@@ -183,6 +208,15 @@ export type ScoreRecord = {
   bond: number;
   coverage_calls: number;
   active: boolean;
+  /** Who has actually paid this provider. Reported as facts, never as a
+   *  penalty — see capConfidenceByCounterparties. */
+  counterparties: {
+    distinct_payers: number;
+    observed_payments: number;
+    self_payments: number;
+    top_payer_share: number;
+    single_source: boolean;
+  };
   sla: {
     max_staleness_s: number;
     max_latency_ms: number;
@@ -231,9 +265,12 @@ export function buildScoreRecord(args: {
   onchain: ProviderState;
   agg: SampleAggregate;
   appId: number;
+  counterparties?: CounterpartyStats;
 }): ScoreRecord {
   const { label, endpoint, onchain, agg, appId } = args;
+  const cp = args.counterparties ?? emptyCounterparties();
   const score = computeScore(agg);
+  const confidence = capConfidenceByCounterparties(score.confidence, cp);
 
   return {
     provider: onchain.address,
@@ -247,6 +284,13 @@ export function buildScoreRecord(args: {
     bond: fromMicro(onchain.bondMicro),
     coverage_calls: coverageCalls(onchain.bondMicro, onchain.priceMicro),
     active: onchain.active,
+    counterparties: {
+      distinct_payers: cp.distinctPayers,
+      observed_payments: cp.observedPayments,
+      self_payments: cp.selfPayments,
+      top_payer_share: round4(cp.topPayerShare),
+      single_source: cp.distinctPayers <= 1,
+    },
     sla: {
       max_staleness_s: onchain.maxStaleness,
       max_latency_ms: onchain.maxLatencyMs,
@@ -284,8 +328,11 @@ export function buildScoreRecord(args: {
     reliability_lower_bound: score.reliabilityLower,
     reliability_upper_bound: score.reliabilityUpper,
     breakdown: score.breakdown,
-    confidence: score.confidence,
-    recommendation: score.recommendation,
+    confidence,
+    recommendation: recommendationFor(score.reliabilityLower, confidence, {
+      samples: agg.samples,
+      upheldClaims: agg.upheldClaims,
+    }),
     as_of: new Date().toISOString(),
   };
 }
