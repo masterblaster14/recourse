@@ -713,7 +713,7 @@ npm start                 # http://localhost:3000
 Run the tests:
 
 ```bash
-npm test              # 154 unit tests, no network
+npm test              # 158 unit tests, no network
 npm run test:chain    # adversarial checks against the deployed contract
 ```
 

@@ -117,7 +117,7 @@ exists instead:
   forged signatures, moved timestamps, key rotation to void old evidence, SLA
   widening, withdrawal ahead of a claim, and claim replay. All rejected, plus one
   genuine claim upheld so a pass cannot come from a broken contract.
-- **154 unit tests**, many asserting refusals rather than happy paths.
+- **158 unit tests**, many asserting refusals rather than happy paths.
 - **A critical bug found and fixed by review**: a bonded provider could rotate
   its signing key and void every pending claim for the price of one transaction.
   Documented in the README rather than quietly patched.

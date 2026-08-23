@@ -18,26 +18,60 @@ const HISTORY_S = 2 * 60 * 60;
 const POINTS = HISTORY_S / GRANULARITY_S;
 
 const BASE_PRICE = 0.1842;
-const STEP = 0.00035;
+const STEP = 0.0012;
+/** How hard the walk is pulled back to base each tick. */
+const REVERSION = 0.01;
+/**
+ * A slow cycle underneath the noise, and the reason it is here.
+ *
+ * Cross-provider consistency can only catch a forger when the price actually
+ * moved during the window it is lying about. If the market sat still for 45
+ * minutes, then 45-minute-old data is the same number as fresh data — the
+ * forger is undetectable, and it also did no harm, which is the honest half of
+ * that trade-off.
+ *
+ * The first version of this series was a pure mean-reverting walk with a very
+ * narrow band, so "45 minutes ago" was close to a random redraw from the same
+ * few basis points. Simulated over the detector's actual statistic — the median
+ * divergence across a run's samples — it left the forger *undetected 36% of the
+ * time*. That is not a property of the technique; it is an implausibly calm
+ * synthetic asset. Real ALGO/USD moves several percent within an hour, while
+ * that series moved about half of one.
+ *
+ * Realistic volatility plus a slow cycle puts the miss rate under 1%. The
+ * detector is unchanged — what changed is that the simulated market now behaves
+ * like a market.
+ */
+const CYCLE_AMPLITUDE = 0.035;
+const CYCLE_PERIOD_S = 90 * 60;
 
 /** Ring of prices, index 0 = oldest. `lastTick` is the unix second of the newest. */
 const series: number[] = [];
 let lastTick = 0;
+/** Ticks elapsed since the series began, so the cycle is continuous across
+ *  advances rather than restarting from the ring's left edge. */
+let phaseTick = 0;
 
-function nextPrice(previous: number): number {
+function cycleAt(tick: number): number {
+  return BASE_PRICE * CYCLE_AMPLITUDE * Math.sin((2 * Math.PI * tick * GRANULARITY_S) / CYCLE_PERIOD_S);
+}
+
+/** The noise component only — the cycle is added when a point is stored. */
+let walk = BASE_PRICE;
+
+function nextPrice(): number {
   const drift = (Math.random() - 0.5) * 2 * STEP;
   // Mean-reverting so the walk stays in a plausible band over a long session.
-  const pull = (BASE_PRICE - previous) * 0.02;
-  return Math.round((previous + drift + pull) * 10_000) / 10_000;
+  walk = walk + drift + (BASE_PRICE - walk) * REVERSION;
+  phaseTick++;
+  return Math.round((walk + cycleAt(phaseTick)) * 10_000) / 10_000;
 }
 
 function seed(nowS: number): void {
   series.length = 0;
-  let p = BASE_PRICE;
-  for (let i = 0; i < POINTS; i++) {
-    p = nextPrice(p);
-    series.push(p);
-  }
+  walk = BASE_PRICE;
+  phaseTick = 0;
+  for (let i = 0; i < POINTS; i++) series.push(nextPrice());
   lastTick = nowS;
 }
 
@@ -54,7 +88,7 @@ function advance(nowS: number): void {
     return;
   }
   for (let i = 0; i < ticks; i++) {
-    series.push(nextPrice(series[series.length - 1]));
+    series.push(nextPrice());
     series.shift();
   }
   lastTick += ticks * GRANULARITY_S;
