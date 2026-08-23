@@ -106,7 +106,7 @@ Algorand Python (`algopy`), compiled to TEAL, deployed to TestNet.
 | ✅ | Operator tooling | `preflight`, `setup`, `topup`, `fund`, `sweep`, `readme` |
 | ✅ | **End-to-end workflow documentation** | [WORKFLOW.md](WORKFLOW.md) — four traced flows with sequence diagrams, every step cited to the code that runs it |
 | ✅ | **Provider CLI — bring your own endpoint** | `provider:init` / `provider:register` / `provider:test`. Self-service: no admin, no allow-list, no approval step |
-| ✅ | **Self-registration verified end to end** | A fresh third-party wallet registered itself on TestNet with its own terms (0.002 price, 120s staleness) and staked its own bond — registry went 4 → 5 |
+| ✅ | **Self-registration verified end to end** | A fresh third-party wallet registered itself on TestNet with its own terms (0.002 price, 120s staleness), staked its own bond, then unbonded and deregistered itself — the whole lifecycle, with no operator involved at any step |
 | ✅ | **Pre-flight slashability check** | `provider:test` buys one response as an agent would and reports PASS / FAIL / **SLASHABLE** before you take traffic |
 
 ## 7. Verification
@@ -145,6 +145,6 @@ posture asserted.
 2. **Forged freshness is detected, not punished.** Slashing on a statistic would be the centralised adjudication this project exists to remove.
 3. **The guarantee is capped at the live bond.** Insurance can be insolvent.
 4. **Sybil reset is cheap.** Reputation is per address; a drained provider can start over.
-5. **The four demo providers are ours.** The ecosystem view reframes it against 296 real unbonded endpoints, but does not remove it. A fifth provider is not ours — an unrelated wallet self-enrolled through the CLI with its own price and staleness bound and staked its own bond. It is listed on the dashboard as `Independent`, with facts and no reliability score, because we have never bought from it.
+5. **All four demo providers are ours.** The ecosystem view reframes it against 296 real unbonded endpoints, but does not remove it. A fifth, unrelated wallet did self-enrol through the CLI and later unbond and deregister itself — proving the registry is open and that leaving is as permissionless as joining — but it is not part of the running demo.
 6. **Observed samples are only ours.** Now surfaced by the product rather than only admitted here: every provider reads `single source — confidence capped`, and no provider can reach `high` confidence until a second independent payer appears.
 7. **Operational:** single region, no rate limiting, creator is a single hot key.
