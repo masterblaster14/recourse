@@ -110,4 +110,4 @@ Algorand Python (`algopy`), compiled to TEAL, deployed to TestNet.
 4. **Sybil reset is cheap.** Reputation is per address; a drained provider can start over.
 5. **All four demo providers are ours.** The ecosystem view reframes it against 298 real unbonded endpoints, but does not remove it.
 6. **Observed samples are only ours** and unverifiable by third parties.
-7. **Operational:** no CI, single region, no rate limiting, creator is a single hot key.
+7. **Operational:** single region, no rate limiting, creator is a single hot key.
