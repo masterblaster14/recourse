@@ -15,6 +15,7 @@
 import { test, describe } from "node:test";
 import assert from "node:assert/strict";
 import {
+  settledAmountMicro,
   defaultSpendPolicy,
   PolicyViolation,
   RecourseClient,
@@ -132,5 +133,59 @@ describe("high-value approval", () => {
       () => a.pay(URL_OK, { maxAmountMicro: 1000 }),
       (e: Error) => /session-budget/.test(e.message),
     );
+  });
+});
+
+/**
+ * The session budget is only a control if it counts real money.
+ *
+ * `maxAmountMicro` is a *tolerance* — five times list price, so a small price
+ * change does not strand the agent mid-run. Charging the budget that figure
+ * made every payment look five times its true size: the agent halted after 50
+ * calls against a budget that should have allowed 250, and every reported
+ * spend figure was 5x reality. The pre-flight check still uses the ceiling,
+ * which is right, because the price is not known until the 402 arrives.
+ */
+describe("settled amount booked against the budget", () => {
+  const expect1000 = { exactAmountMicro: 1000, maxAmountMicro: 5000 };
+
+  test("prefers what the chain says moved over what either party intended", () => {
+    const check = { verified: true, reason: "ok", amountMicro: 1000 };
+    assert.equal(settledAmountMicro(check, expect1000), 1000);
+  });
+
+  test("books the agreed price when there is no chain confirmation", () => {
+    assert.equal(settledAmountMicro(null, expect1000), 1000);
+    assert.equal(settledAmountMicro(undefined, expect1000), 1000);
+  });
+
+  test("never books the tolerance ceiling when the real price is known", () => {
+    assert.notEqual(settledAmountMicro(null, expect1000), 5000);
+  });
+
+  test("ignores an unverified settlement rather than trusting its figure", () => {
+    // A facilitator reporting a number the chain does not corroborate must not
+    // be the thing that moves our books.
+    const bogus = { verified: false, reason: "receiver mismatch", amountMicro: 999_999 };
+    assert.equal(settledAmountMicro(bogus, expect1000), 1000);
+  });
+
+  test("falls back to the ceiling only when nothing better exists", () => {
+    assert.equal(settledAmountMicro(null, { maxAmountMicro: 5000 }), 5000);
+    assert.equal(settledAmountMicro(null, {}), 0);
+  });
+
+  test("a full session at list price stays inside the stated budget", () => {
+    // The regression in one line: 250 calls at 1000 micro is exactly the
+    // 250000 budget. Booking the ceiling would have halted at 50.
+    const budget = 250_000;
+    let spent = 0;
+    let calls = 0;
+    while (spent + 1000 <= budget) {
+      spent += settledAmountMicro({ verified: true, reason: "ok", amountMicro: 1000 }, expect1000);
+      calls++;
+    }
+    assert.equal(calls, 250);
+    assert.equal(spent, budget);
   });
 });

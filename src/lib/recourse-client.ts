@@ -92,6 +92,30 @@ export function defaultSpendPolicy(): SpendPolicy {
   };
 }
 
+/**
+ * What to charge the session budget for a payment that went through.
+ *
+ * Book what actually moved, not the ceiling we were willing to tolerate.
+ * `maxAmountMicro` is a tolerance — five times list price, so a small price
+ * change does not strand the agent mid-run. Charging the budget that figure
+ * made every payment look five times its real size, which halted the agent at
+ * a fifth of its stated budget and overstated spend everywhere it was reported.
+ *
+ * Testing the ceiling *before* paying is still correct: the final price is not
+ * known until the 402 arrives, so the pre-flight check has to assume the worst
+ * case. Afterwards there is nothing to guess about. The chain-verified amount
+ * is the most authoritative figure available — it is what the network says
+ * moved, not what any party claims — so it wins, then the price we agreed to,
+ * and only then the ceiling.
+ */
+export function settledAmountMicro(
+  check: SettlementCheck | null | undefined,
+  expect: PaymentExpectation,
+): number {
+  if (check?.verified && check.amountMicro !== undefined) return check.amountMicro;
+  return expect.exactAmountMicro ?? expect.maxAmountMicro ?? 0;
+}
+
 /** Raised when the agent's own policy stops it, before any money moves. */
 export class PolicyViolation extends Error {
   constructor(readonly rule: string, detail: string) {
@@ -449,7 +473,7 @@ export class RecourseClient {
 
       if (res.ok) {
         this.ledger.payments++;
-        this.ledger.spentMicro += expect.maxAmountMicro ?? 0;
+        this.ledger.spentMicro += settledAmountMicro(settlementCheck, expect);
         this.recentPayments.push(Date.now());
         this.ledger.consecutiveRefusals = 0;
       }
