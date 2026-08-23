@@ -160,7 +160,9 @@ export async function providerDirectory(): Promise<ProviderSummary[]> {
           "Nobody approved it, and we have never bought from it — so there is no " +
           "reliability score here, only what the chain says.",
         endpoint: "",
-        variant: "compliant",
+        // We have never observed this provider, so we do not get to describe
+        // how it behaves. "compliant" here would be a claim, not a fact.
+        variant: "unknown",
         independent: true,
         price: fromMicro(onchain.priceMicro),
         bond: fromMicro(onchain.bondMicro),

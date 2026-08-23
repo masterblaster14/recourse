@@ -50,7 +50,7 @@
 
   <!-- --------------------------------------------------------- stat band -->
   <section class="statband" id="statband">
-    <div class="stat"><div class="n" id="st-providers">—</div><div class="l">Providers bonded</div></div>
+    <div class="stat"><div class="n" id="st-providers">—</div><div class="l">Bonded in this registry</div></div>
     <div class="stat"><div class="n" id="st-bonded">—</div><div class="l">Bonded right now</div></div>
     <div class="stat accent"><div class="n" id="st-claims">—</div><div class="l">Claims upheld · cumulative</div></div>
     <div class="stat"><div class="n" id="st-slashed">—</div><div class="l">Slashed · cumulative</div></div>
@@ -224,7 +224,7 @@
         <div class="card-body">
           <div class="eco-headline" id="eco-headline">
             <div class="eco-num"><span id="eco-total">—</span><small>endpoints indexed</small></div>
-            <div class="eco-num accent"><span id="eco-bonded">—</span><small>backed by collateral</small></div>
+            <div class="eco-num accent"><span id="eco-bonded">—</span><small>of those, backed by collateral</small></div>
             <div class="eco-num bad"><span id="eco-unbonded">—</span><small>no recourse if they fail</small></div>
           </div>
           <div id="eco-list"><div class="empty">Loading the catalogue…</div></div>
@@ -233,6 +233,10 @@
             recipient, settlement count, and whether that recipient has posted collateral. We deliberately do
             <b>not</b> report reliability for endpoints we have never bought from — a directory listing is not
             evidence about anyone's uptime.
+            <br><br>
+            This counts <b>catalogued endpoints</b>, which is why it can differ from the registry total above:
+            that one counts <b>bonded providers</b>, and a provider can hold a bond without yet having an
+            endpoint listed in the Bazaar.
           </div>
         </div>
       </div>

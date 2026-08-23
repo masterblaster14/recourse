@@ -10,7 +10,9 @@ const fmt = (n, d = 3) => Number(n ?? 0).toFixed(d);
 const state = {
   asset: "USDC",
   appId: null,
-  exploreSamples: 10,
+  // Unset until /providers reports it. Guessing a number here meant the
+  // page could state a different exploration budget than the agent uses.
+  exploreSamples: null,
   bondBase: {},          // provider -> highest bond seen, for the drain bar
   run: { paid: 0, pass: 0, fail: 0, claims: 0, spent: 0, refund: 0, slash: 0, calls: 0, total: 0 },
   switched: false,
@@ -84,8 +86,10 @@ async function loadHealth() {
 async function loadProviders() {
   try {
     const d = await j("/providers");
-    state.exploreSamples = d.explore_samples ?? 10;
-    $("explore-note").textContent = `explores ${state.exploreSamples} calls before trusting a score`;
+    state.exploreSamples = d.explore_samples ?? null;
+    $("explore-note").textContent = state.exploreSamples === null
+      ? ""
+      : `explores ${state.exploreSamples} calls before trusting a score`;
     renderProviders(d.providers);
   } catch { /* transient */ }
 }

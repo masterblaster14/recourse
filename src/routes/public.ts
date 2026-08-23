@@ -10,7 +10,7 @@ import { Hono } from "hono";
 import { streamSSE } from "hono/streaming";
 import { env, acctUrl, appUrl, fromMicro, txUrl } from "../env.ts";
 import { history, subscribe } from "../lib/bus.ts";
-import { chainHealthy } from "../lib/chain.ts";
+import { chainHealthy, readProvider } from "../lib/chain.ts";
 import { store } from "../lib/db.ts";
 import { providers, slaFor } from "../lib/providers.ts";
 import { ecosystem, preflight } from "../lib/bazaar.ts";
@@ -66,12 +66,36 @@ publicRoutes.get("/providers", async c => {
  * contains. That check is what stops the API quietly serving a weaker SLA than
  * the one the provider actually staked against.
  */
-publicRoutes.get("/sla", c => {
+publicRoutes.get("/sla", async c => {
   const address = c.req.query("provider");
   if (!address) return c.json({ slas: publishedSlas() });
+
   const p = providers().find(x => x.address === address);
-  if (!p) return c.json({ error: "unknown provider" }, 404);
-  return c.json({ provider: p.address, label: p.label, sla: slaFor(p) });
+  if (p) return c.json({ provider: p.address, label: p.label, sla: slaFor(p) });
+
+  // Registered by somebody else. We do not host their SLA document — they do —
+  // but answering "unknown provider" about an address carrying a commitment on
+  // chain would be false, and would contradict the directory that lists it.
+  const onchain = env.appId ? await readProvider(env.appId, address).catch(() => null) : null;
+  if (!onchain) return c.json({ error: "unknown provider", provider: address }, 404);
+
+  return c.json({
+    provider: address,
+    label: "Independent provider",
+    hosted_here: false,
+    note:
+      "Registered with its own terms. Its SLA document is published by the " +
+      "provider, not by us — fetch it from them and check its sha256 against " +
+      "sla_hash below before trusting the signing key inside.",
+    commitment: {
+      sla_hash: `0x${Buffer.from(onchain.slaHash).toString("hex")}`,
+      pubkey_b64: Buffer.from(onchain.pubkey).toString("base64"),
+      price_micro: onchain.priceMicro,
+      max_staleness_s: onchain.maxStaleness,
+      max_latency_ms: onchain.maxLatencyMs,
+      bond_micro: onchain.bondMicro,
+    },
+  });
 });
 
 publicRoutes.get("/registry", async c => {
