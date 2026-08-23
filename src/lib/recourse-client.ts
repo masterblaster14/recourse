@@ -17,7 +17,7 @@ import { ExactAvmScheme } from "@x402/avm/exact/client";
 import { env, x402SecretKeyFromMnemonic } from "../env.ts";
 import { decodePaymentRequired } from "../x402.ts";
 import { claimMessage, ed25519Verify, responseHash } from "./signing.ts";
-import { submitClaim } from "./chain.ts";
+import { submitClaim, verifySettlement, type SettlementCheck } from "./chain.ts";
 import type { ScoreRecord } from "./scoring.ts";
 import type { CheckResult, RouteCandidate } from "./bus.ts";
 
@@ -36,7 +36,12 @@ export type PaymentExpectation = {
   payTo?: string;
   assetId?: number;
   networkCaip2?: string;
+  /** Ceiling the agent will tolerate in the 402. */
   maxAmountMicro?: number;
+  /** The exact price the agent expects to have moved, checked on chain after
+   *  settlement. Distinct from the ceiling above: a cap is what we would
+   *  tolerate, this is what we actually agreed to. */
+  exactAmountMicro?: number;
 };
 
 /**
@@ -64,6 +69,16 @@ export type SpendPolicy = {
   allowedHosts: string[];
   /** Consecutive refusals after which the agent stops for good. */
   haltAfterConsecutiveRefusals: number;
+  /**
+   * Above this, the agent will not act alone.
+   *
+   * Autonomy is the point of x402, but it should be bounded by value rather
+   * than unbounded by default. Everything routine settles without a human;
+   * anything unusually large stops and asks. The threshold is what makes
+   * "no human approves any individual payment" a deliberate policy for small
+   * amounts instead of an absence of one.
+   */
+  requireApprovalAboveMicro: number;
 };
 
 export function defaultSpendPolicy(): SpendPolicy {
@@ -73,6 +88,7 @@ export function defaultSpendPolicy(): SpendPolicy {
     maxPaymentsPerMinute: env.maxPaymentsPerMinute,
     allowedHosts: env.allowedHosts,
     haltAfterConsecutiveRefusals: 5,
+    requireApprovalAboveMicro: env.approvalThresholdMicro,
   };
 }
 
@@ -180,6 +196,9 @@ export type BuyResult = {
   refused: boolean;
   body: SignedResponse | null;
   settlement: { transaction: string; payer?: string; success: boolean } | null;
+  /** Independent on-chain confirmation that the reported settlement is real.
+   *  Null when there was nothing to check. */
+  settlementCheck: SettlementCheck | null;
   /**
    * True when the x402 exchange itself never completed — the client could not
    * build a payment, or the facilitator failed to settle. The provider never
@@ -315,6 +334,14 @@ export class RecourseClient {
       }
     }
 
+    if (priceMicro > p.requireApprovalAboveMicro) {
+      this.halt(
+        "needs-human-approval",
+        priceMicro + " is above the " + p.requireApprovalAboveMicro +
+          " threshold this agent may authorise on its own",
+      );
+    }
+
     if (priceMicro > p.maxPerPaymentMicro) {
       throw new PolicyViolation(
         "per-payment-cap",
@@ -407,6 +434,19 @@ export class RecourseClient {
         }
       }
 
+      // Do not take the facilitator's word for it. The transaction id it
+      // returned is checkable, so check it: right asset, right amount, from us,
+      // to the party we agreed to pay.
+      let settlementCheck: SettlementCheck | null = null;
+      if (settlement?.transaction && expect.payTo) {
+        settlementCheck = await verifySettlement(settlement.transaction, {
+          sender: this.address,
+          receiver: expect.payTo,
+          assetId: expect.assetId,
+          amountMicro: expect.exactAmountMicro,
+        });
+      }
+
       if (res.ok) {
         this.ledger.payments++;
         this.ledger.spentMicro += expect.maxAmountMicro ?? 0;
@@ -416,6 +456,7 @@ export class RecourseClient {
 
       return {
         ok: res.ok, status: res.status, latencyMs, totalMs, body, settlement, refused,
+        settlementCheck,
         // A 402 that came back a second time means payment did not take.
         paymentFailed: !res.ok && res.status === 402,
       };
@@ -440,6 +481,7 @@ export class RecourseClient {
         totalMs,
         body: null,
         settlement: null,
+        settlementCheck: null,
         refused,
         // wrapFetchWithPayment throws only on the payment path: it could not
         // create a payload, or settlement failed. A refusal is our own doing,

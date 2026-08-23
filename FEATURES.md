@@ -42,6 +42,8 @@ Algorand Python (`algopy`), compiled to TEAL, deployed to TestNet.
 | ✅ | Bazaar discovery metadata | `@x402-avm/extensions`; routes appear in the public catalog after settlement |
 | ✅ | Canonical resource URLs | Pinned, so TLS termination cannot publish `http://` to the catalog |
 | ✅ | Server-side payment recording | Any buyer's settled payment is booked, not just our own agent's |
+| ✅ | Settled-txid uniqueness | A repeated settlement id is rejected, not silently double-counted |
+| ✅ | Transport hardening | HSTS, nosniff, no-referrer on every response |
 | ✅ | Canonical-JSON interop | Matches `payment-requirements-hash.v1` on all 6 published vectors |
 
 ## 3. The buying agent
@@ -59,6 +61,8 @@ Algorand Python (`algopy`), compiled to TEAL, deployed to TestNet.
 | ✅ | **Payment rate limit** | Bounds a runaway loop in time, not just in money |
 | ✅ | **Host allow-list** | "pay attacker.example" never reaches the network |
 | ✅ | **Self-halt** | A budget or host breach stops the agent for good, not just that call |
+| ✅ | **Human approval above a threshold** | Routine calls are autonomous; anything unusually large stops and asks |
+| ✅ | **On-chain settlement verification** | Confirms the facilitator's reported txid really moved that asset, amount, sender and receiver |
 | ✅ | Bond-scaled exploration | A thin bond buys proportionally less rope |
 | ✅ | Failure attribution | Payment-layer failures are discarded, never charged to a provider |
 | ❌ | Reasoning-trace capture / intent inference | Needs a model and trace collection. The deterministic half of agent safety is built; judging *why* an agent misbehaved is a different product. |
@@ -99,7 +103,7 @@ Algorand Python (`algopy`), compiled to TEAL, deployed to TestNet.
 
 | | Feature | Notes |
 |:--:|---|---|
-| ✅ | 100 unit tests | Signing, scoring, routing, box decoding, consistency, payee refusal, spend policy, canonicalisation interop |
+| ✅ | 102 unit tests | Signing, scoring, routing, box decoding, consistency, payee refusal, spend policy, canonicalisation interop |
 | ✅ | 9 on-chain guard checks | Adversarial, against the deployed contract |
 | ✅ | Refusal-path testing | Tests assert what is *rejected*, not only what works |
 | ✅ | CI on push | GitHub Actions: typecheck + unit suite on every push and PR |

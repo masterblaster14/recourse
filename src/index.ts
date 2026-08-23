@@ -25,6 +25,22 @@ import { slaHash } from "./lib/signing.ts";
 const app = new Hono();
 
 app.use("*", cors({ origin: "*", exposeHeaders: ["PAYMENT-RESPONSE", "PAYMENT-REQUIRED"] }));
+
+/**
+ * Transport hardening.
+ *
+ * A 402 names a price and a payee, and a paid response carries a signature.
+ * Both are worth tampering with on the wire, so downgrade to plaintext must not
+ * be silently available. The response signature is the real defence — it makes
+ * interception detectable rather than merely unlikely — but HSTS removes the
+ * easy attack for anything that reaches us over a browser.
+ */
+app.use("*", async (c, next) => {
+  await next();
+  c.header("Strict-Transport-Security", "max-age=31536000; includeSubDomains");
+  c.header("X-Content-Type-Options", "nosniff");
+  c.header("Referrer-Policy", "no-referrer");
+});
 if (process.env.NODE_ENV !== "production") app.use("*", logger());
 
 /**

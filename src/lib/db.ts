@@ -159,6 +159,10 @@ CREATE TABLE IF NOT EXISTS payments (
   ts           TIMESTAMPTZ DEFAULT now()
 );
 CREATE INDEX IF NOT EXISTS payments_ts ON payments (ts DESC);
+-- One settled transaction is one payment. A repeated txid means either a
+-- bookkeeping bug or an attempt to reuse a settlement, and both should be
+-- visible rather than silently doubling the recorded volume.
+CREATE UNIQUE INDEX IF NOT EXISTS payments_txid_unique ON payments (txid) WHERE txid <> '';
 `;
 
 function percentile(values: number[], p: number): number {
@@ -357,7 +361,8 @@ class PostgresStore implements Store {
   async insertPayment(p: PaymentRow): Promise<void> {
     await this.pool.query(
       `INSERT INTO payments (provider, payer, resource, amount_micro, txid, ts)
-       VALUES ($1,$2,$3,$4,$5,$6)`,
+       VALUES ($1,$2,$3,$4,$5,$6)
+       ON CONFLICT (txid) WHERE txid <> '' DO NOTHING`,
       [p.provider, p.payer, p.resource, p.amount_micro, p.txid, p.ts],
     );
   }

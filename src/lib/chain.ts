@@ -66,6 +66,92 @@ export function tealSource(): { approval: string; clear: string } {
   };
 }
 
+let _indexer: algosdk.Indexer | null = null;
+export function indexer(): algosdk.Indexer {
+  if (!_indexer) _indexer = new algosdk.Indexer("", env.indexerUrl, "");
+  return _indexer;
+}
+
+export type SettlementCheck = {
+  verified: boolean;
+  reason: string;
+  confirmedRound?: number;
+  amountMicro?: number;
+  sender?: string;
+  receiver?: string;
+};
+
+/**
+ * Confirm on chain that a settlement the facilitator reported actually happened,
+ * and happened as described.
+ *
+ * A facilitator is a third party in the payment path. Taking its word that money
+ * moved is exactly the trust assumption this project exists to remove: a
+ * compromised or buggy one could report a settlement that never occurred, or one
+ * that paid a different address or a smaller amount, and nothing downstream
+ * would notice. The transaction id it returns is checkable, so we check it.
+ *
+ * Tries algod first — a just-settled transaction is still in its recent cache —
+ * and falls back to the indexer, which lags by a round or two.
+ */
+export async function verifySettlement(
+  txid: string,
+  expect: { sender?: string; receiver?: string; assetId?: number; amountMicro?: number },
+  attempts = 3,
+): Promise<SettlementCheck> {
+  type Txn = {
+    txType?: string; sender?: unknown; confirmedRound?: unknown;
+    assetTransferTransaction?: { amount?: unknown; receiver?: unknown; assetId?: unknown };
+  };
+
+  let txn: Txn | null = null;
+  for (let i = 0; i < attempts && !txn; i++) {
+    try {
+      const r = (await algod().pendingTransactionInformation(txid).do()) as {
+        txn?: { txn?: Txn }; confirmedRound?: unknown;
+      };
+      const inner = r?.txn?.txn;
+      if (inner) txn = { ...inner, confirmedRound: r.confirmedRound };
+    } catch {
+      try {
+        const r = (await indexer().lookupTransactionByID(txid).do()) as { transaction?: Txn };
+        if (r?.transaction) txn = r.transaction;
+      } catch {
+        // Not visible yet; the indexer trails the chain by a round or two.
+      }
+    }
+    if (!txn && i < attempts - 1) await new Promise(r => setTimeout(r, 1200));
+  }
+
+  if (!txn) return { verified: false, reason: "transaction not found on chain" };
+
+  const axfer = txn.assetTransferTransaction;
+  if (!axfer) return { verified: false, reason: `not an asset transfer (${txn.txType ?? "unknown"})` };
+
+  const amount = Number(axfer.amount ?? 0);
+  const receiver = String(axfer.receiver ?? "");
+  const sender = String(txn.sender ?? "");
+  const assetId = Number(axfer.assetId ?? 0);
+  const found: SettlementCheck = {
+    verified: false, reason: "", amountMicro: amount, sender, receiver,
+    confirmedRound: Number(txn.confirmedRound ?? 0) || undefined,
+  };
+
+  if (expect.assetId !== undefined && assetId !== expect.assetId) {
+    return { ...found, reason: `asset ${assetId} is not ${expect.assetId}` };
+  }
+  if (expect.receiver && receiver !== expect.receiver) {
+    return { ...found, reason: `paid ${receiver.slice(0, 10)}… not ${expect.receiver.slice(0, 10)}…` };
+  }
+  if (expect.sender && sender !== expect.sender) {
+    return { ...found, reason: `sent by ${sender.slice(0, 10)}… not ${expect.sender.slice(0, 10)}…` };
+  }
+  if (expect.amountMicro !== undefined && amount !== expect.amountMicro) {
+    return { ...found, reason: `moved ${amount} not ${expect.amountMicro}` };
+  }
+  return { ...found, verified: true, reason: "matches the advertised terms" };
+}
+
 // ------------------------------------------------------------------- helpers
 
 export function signerFor(account: algosdk.Account): algosdk.TransactionSigner {

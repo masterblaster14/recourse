@@ -65,6 +65,9 @@ export const env = {
   /** Total an agent session may spend before it stops itself, micro units. */
   sessionBudgetMicro: num("AGENT_SESSION_BUDGET_MICRO", 250_000),
   maxPaymentsPerMinute: num("AGENT_MAX_PAYMENTS_PER_MINUTE", 60),
+  /** Above this a payment stops and asks for a human. 0.05 by default: far
+   *  above any routine call here, far below anything worth losing. */
+  approvalThresholdMicro: num("AGENT_APPROVAL_THRESHOLD_MICRO", 50_000),
   /** Hosts the agent may pay at all. Empty means no host restriction. */
   allowedHosts: opt("AGENT_ALLOWED_HOSTS", "")
     .split(",").map(h => h.trim()).filter(Boolean),

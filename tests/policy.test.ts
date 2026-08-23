@@ -113,3 +113,24 @@ describe("spend policy", () => {
     assert.ok(p.haltAfterConsecutiveRefusals > 0);
   });
 });
+
+describe("high-value approval", () => {
+  test("an unusually large payment stops and asks for a human", async () => {
+    const a = agent({ requireApprovalAboveMicro: 5_000, maxPerPaymentMicro: 1_000_000 });
+    await assert.rejects(
+      () => a.pay(URL_OK, { maxAmountMicro: 60_000 }),
+      (e: Error) => e instanceof PolicyViolation && /needs-human-approval/.test(e.message),
+    );
+    assert.equal(a.spend().halted, true);
+  });
+
+  test("routine payments still settle without anyone being asked", async () => {
+    // Below the threshold the agent is fully autonomous; the budget stops it,
+    // which proves the approval gate let it through.
+    const a = agent({ requireApprovalAboveMicro: 5_000, sessionBudgetMicro: 0 });
+    await assert.rejects(
+      () => a.pay(URL_OK, { maxAmountMicro: 1000 }),
+      (e: Error) => /session-budget/.test(e.message),
+    );
+  });
+});

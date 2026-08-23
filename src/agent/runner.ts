@@ -234,6 +234,7 @@ export async function runDemo(opts: DemoOptions = {}): Promise<DemoSummary> {
         assetId: env.assetId,
         networkCaip2: env.networkCaip2,
         maxAmountMicro: chosen.price_micro * 5,
+        exactAmountMicro: chosen.price_micro,
       });
 
       if (result.refused) {
@@ -253,6 +254,16 @@ export async function runDemo(opts: DemoOptions = {}): Promise<DemoSummary> {
         // ones made by agents that are not us. Recording here too would double
         // count our own traffic.
       }
+      // A settlement the chain does not corroborate is a facilitator problem,
+      // and a serious one — say so loudly rather than counting it as a purchase.
+      if (result.settlementCheck && !result.settlementCheck.verified) {
+        log(
+          "error",
+          `call ${i}: settlement ${settledTx?.slice(0, 10)}… does NOT match on chain — ` +
+            `${result.settlementCheck.reason}`,
+        );
+      }
+
       publish({
         type: "pay", at: now(), runId, index: i,
         provider: chosen.provider, label: chosen.label,
