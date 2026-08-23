@@ -93,48 +93,97 @@ export type SettlementCheck = {
  *
  * Tries algod first — a just-settled transaction is still in its recent cache —
  * and falls back to the indexer, which lags by a round or two.
+ *
+ * The two sources describe the same transaction with different field names, and
+ * conflating them is a quiet way to get this wrong: algod returns a decoded
+ * algosdk Transaction (`type`, `assetTransfer.assetIndex`) while the indexer
+ * returns its own REST shape (`txType`, `assetTransferTransaction.assetId`).
+ * Reading indexer names off an algod response yields `undefined` rather than an
+ * error, so the check does not fail loudly — it reports "not an asset transfer"
+ * about a perfectly good payment. Both shapes are normalised here, once.
  */
+export type NormalisedTxn = {
+  type: string;
+  sender: string;
+  receiver: string;
+  assetId: number;
+  amountMicro: number;
+  confirmedRound?: number;
+};
+
+/** algod: a decoded algosdk Transaction plus the confirming round. */
+export function normaliseAlgodTxn(res: unknown): NormalisedTxn | null {
+  const r = res as {
+    txn?: { txn?: Record<string, unknown> };
+    confirmedRound?: unknown;
+  };
+  const inner = r?.txn?.txn;
+  if (!inner) return null;
+  const at = inner.assetTransfer as
+    | { amount?: unknown; receiver?: unknown; assetIndex?: unknown }
+    | undefined;
+  return {
+    type: String(inner.type ?? ""),
+    sender: String(inner.sender ?? ""),
+    receiver: String(at?.receiver ?? ""),
+    assetId: Number(at?.assetIndex ?? 0),
+    amountMicro: Number(at?.amount ?? 0),
+    confirmedRound: Number(r.confirmedRound ?? 0) || undefined,
+  };
+}
+
+/** indexer: the REST representation, which trails the chain slightly. */
+export function normaliseIndexerTxn(res: unknown): NormalisedTxn | null {
+  const t = (res as { transaction?: Record<string, unknown> })?.transaction;
+  if (!t) return null;
+  const at = t.assetTransferTransaction as
+    | { amount?: unknown; receiver?: unknown; assetId?: unknown }
+    | undefined;
+  return {
+    type: String(t.txType ?? ""),
+    sender: String(t.sender ?? ""),
+    receiver: String(at?.receiver ?? ""),
+    assetId: Number(at?.assetId ?? 0),
+    amountMicro: Number(at?.amount ?? 0),
+    confirmedRound: Number(t.confirmedRound ?? 0) || undefined,
+  };
+}
+
 export async function verifySettlement(
   txid: string,
   expect: { sender?: string; receiver?: string; assetId?: number; amountMicro?: number },
   attempts = 3,
 ): Promise<SettlementCheck> {
-  type Txn = {
-    txType?: string; sender?: unknown; confirmedRound?: unknown;
-    assetTransferTransaction?: { amount?: unknown; receiver?: unknown; assetId?: unknown };
-  };
+  let txn: NormalisedTxn | null = null;
 
-  let txn: Txn | null = null;
   for (let i = 0; i < attempts && !txn; i++) {
+    // Each source is tried on its own merits. Nesting the indexer inside the
+    // algod catch made it unreachable whenever algod answered — which is the
+    // common case for a payment that just settled.
     try {
-      const r = (await algod().pendingTransactionInformation(txid).do()) as {
-        txn?: { txn?: Txn }; confirmedRound?: unknown;
-      };
-      const inner = r?.txn?.txn;
-      if (inner) txn = { ...inner, confirmedRound: r.confirmedRound };
+      txn = normaliseAlgodTxn(await algod().pendingTransactionInformation(txid).do());
     } catch {
+      // Outside algod's recent-transaction window, or not yet visible.
+    }
+    if (!txn) {
       try {
-        const r = (await indexer().lookupTransactionByID(txid).do()) as { transaction?: Txn };
-        if (r?.transaction) txn = r.transaction;
+        txn = normaliseIndexerTxn(await indexer().lookupTransactionByID(txid).do());
       } catch {
-        // Not visible yet; the indexer trails the chain by a round or two.
+        // The indexer trails the chain by a round or two.
       }
     }
     if (!txn && i < attempts - 1) await new Promise(r => setTimeout(r, 1200));
   }
 
   if (!txn) return { verified: false, reason: "transaction not found on chain" };
+  if (txn.type !== "axfer") {
+    return { verified: false, reason: `not an asset transfer (${txn.type || "unknown"})` };
+  }
 
-  const axfer = txn.assetTransferTransaction;
-  if (!axfer) return { verified: false, reason: `not an asset transfer (${txn.txType ?? "unknown"})` };
-
-  const amount = Number(axfer.amount ?? 0);
-  const receiver = String(axfer.receiver ?? "");
-  const sender = String(txn.sender ?? "");
-  const assetId = Number(axfer.assetId ?? 0);
+  const { amountMicro: amount, receiver, sender, assetId } = txn;
   const found: SettlementCheck = {
     verified: false, reason: "", amountMicro: amount, sender, receiver,
-    confirmedRound: Number(txn.confirmedRound ?? 0) || undefined,
+    confirmedRound: txn.confirmedRound,
   };
 
   if (expect.assetId !== undefined && assetId !== expect.assetId) {

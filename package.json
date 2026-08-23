@@ -23,6 +23,10 @@
     "readme": "tsx src/scripts/readme-proof.ts",
     "sweep": "tsx src/scripts/sweep.ts",
     "verify:guards": "tsx src/scripts/verify-guards.ts",
+    "provider": "tsx src/scripts/provider.ts",
+    "provider:init": "tsx src/scripts/provider.ts init",
+    "provider:register": "tsx src/scripts/provider.ts register",
+    "provider:test": "tsx src/scripts/provider.ts test",
     "test": "tsx --test tests/*.test.ts",
     "test:chain": "tsx src/scripts/verify-guards.ts"
   },

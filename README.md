@@ -713,7 +713,7 @@ npm start                 # http://localhost:3000
 Run the tests:
 
 ```bash
-npm test              # 110 unit tests, no network
+npm test              # 118 unit tests, no network
 npm run test:chain    # adversarial checks against the deployed contract
 ```
 
@@ -753,6 +753,77 @@ src/agent/runner.ts              the buying agent loop
 src/routes/                      paid, public and admin routes
 public/                          dashboard
 ```
+
+## Bring your own endpoint
+
+Recourse has no admin, no allow-list and no approval step. `register` and
+`deposit_bond` both key off `Txn.sender`, so a provider enrols **itself** from
+its own wallet — nobody here can enrol it, block it, or touch its bond. The CLI
+is ergonomics around that, not a gatekeeper; every call it makes is an ordinary
+application call you could write yourself with algosdk.
+
+```bash
+npm run provider:init -- --address <your ALGO address> --price 0.002 --staleness 120
+```
+
+Generates a response-signing key — deliberately **not** the key holding your
+bond, because signing happens on every request while the bond key signs twice in
+its life — and prints the SLA document to publish. Nothing touches the chain.
+
+```bash
+npm run provider:register -- --sla-url https://you.example/sla --bond 0.2 --mnemonic "..."
+```
+
+Fetches what you published, refuses if the document names a different wallet,
+commits the hash on chain, stakes the collateral, then **reads it back from the
+chain** rather than trusting its own success message.
+
+```bash
+npm run provider:test -- --endpoint https://you.example/feed --provider <your address> --sla-url https://you.example/sla
+```
+
+The one that matters. It buys one response exactly as an agent would — real
+x402 payment, chain-of-custody check on your key, on-chain settlement
+verification, then the six checks — and tells you plainly which of three things
+you are:
+
+```
+PASS       this response honoured everything you committed to
+FAIL       an agent would route away from you; not slashable, no proof
+SLASHABLE  you signed a response that breaks your own SLA — anyone
+           holding it can take 0.01 USDC from your bond
+```
+
+Registering is a promise. The bond makes the promise expensive. Finding out
+your endpoint breaches its own SLA *before* you take traffic is the cheapest
+this discovery ever gets.
+
+### Buying, from your own agent
+
+The client takes its own wallet and its own limits — nothing is bound to ours:
+
+```ts
+import { RecourseClient } from "recourse/src/lib/recourse-client.ts";
+
+const agent = new RecourseClient(myMnemonic, {
+  maxPerPaymentMicro: 2000,
+  sessionBudgetMicro: 100_000,
+  maxPaymentsPerMinute: 30,
+  allowedHosts: ["api.mysupplier.com"],
+  requireApprovalAboveMicro: 25_000,
+  haltAfterConsecutiveRefusals: 3,
+});
+
+const { record } = await agent.score(RECOURSE_URL, sellerAddress);   // paid, over x402
+if (record && record.recommendation !== "avoid") {
+  const result = await agent.buy(endpoint, { payTo: sellerAddress });
+  const outcome = agent.verify(result, record.sla, pubkey);
+  if (outcome.provableViolation) await agent.claim({ /* … */ });
+}
+```
+
+Every instance carries its own keypair, spend policy and private ledger, so two
+agents in one process cannot spend each other's budget or halt each other.
 
 ## Further reading
 
