@@ -4,7 +4,7 @@
  */
 import { test, describe } from "node:test";
 import assert from "node:assert/strict";
-import { computeConsistency } from "../src/lib/consistency.ts";
+import { computeConsistency, CONSISTENCY_TOLERANCE } from "../src/lib/consistency.ts";
 import type { SampleRow } from "../src/lib/db.ts";
 
 /** A true price path: rises steadily, so a lag is visible as a price gap. */
@@ -114,5 +114,66 @@ describe("computeConsistency", () => {
   test("ignores samples with no usable price", () => {
     const rows = market(6).map(r => ({ ...r, price: 0 }));
     assert.equal(computeConsistency(rows).size, 0);
+  });
+});
+
+/**
+ * The bug that made this whole detector inert in production.
+ *
+ * `samples.claimed_ts` is a Postgres BIGINT, and node-postgres returns int8 as
+ * a *string* on purpose — an int8 can exceed Number.MAX_SAFE_INTEGER and
+ * silently losing precision would be worse than a type surprise. Nothing threw.
+ * `computeConsistency` simply filtered every row out on
+ * `typeof r.claimed_ts === "number"`, no cohort ever reached three providers,
+ * and the cross-provider forger detector returned an empty map on every call.
+ *
+ * The in-memory store keeps numbers, so every existing test passed while the
+ * deployed system did nothing. These pin both halves: that the wrong type is
+ * genuinely fatal here, and that the numeric shape the store must produce works.
+ */
+describe("claimed_ts arriving as a string", () => {
+  const at = (provider: string, price: number, claimed_ts: number) => ({
+    provider, price, claimed_ts,
+    ts: new Date(claimed_ts * 1000), http_status: 200, latency_ms: 100,
+    schema_ok: true, sig_ok: true, staleness_ok: true, latency_ok: true,
+  });
+
+  // Three honest providers plus a forger, all covering the same moment.
+  const T = 1_787_000_000;
+  const numeric = [
+    at("honest-a", 0.2000, T), at("honest-b", 0.2001, T + 5),
+    at("honest-c", 0.1999, T + 9), at("forger", 0.2500, T + 3),
+    at("honest-a", 0.2002, T + 60), at("honest-b", 0.2003, T + 62),
+    at("honest-c", 0.2001, T + 64), at("forger", 0.2505, T + 66),
+  ];
+
+  test("numeric timestamps produce a verdict", () => {
+    const out = computeConsistency(numeric as never);
+    assert.ok(out.size > 0, "with usable rows there must be verdicts");
+    const forger = out.get("forger");
+    assert.ok(forger, "the forger must be judged");
+    assert.ok(forger.checked > 0, "its samples must actually be checked");
+    assert.ok(forger.medianDivergence > CONSISTENCY_TOLERANCE,
+      "a forger 25% off the market must read as divergent");
+  });
+
+  test("string timestamps silently produce nothing — the production failure", () => {
+    const stringified = numeric.map(r => ({ ...r, claimed_ts: String(r.claimed_ts) }));
+    const out = computeConsistency(stringified as never);
+    assert.equal(out.size, 0,
+      "this is the inert state: no throw, no warning, just an empty verdict");
+  });
+
+  test("string prices are equally fatal", () => {
+    const stringified = numeric.map(r => ({ ...r, price: String(r.price) }));
+    assert.equal(computeConsistency(stringified as never).size, 0);
+  });
+
+  test("an honest provider is not marked divergent by the same data", () => {
+    const out = computeConsistency(numeric as never);
+    const honest = out.get("honest-a");
+    assert.ok(honest);
+    assert.ok(honest.medianDivergence <= CONSISTENCY_TOLERANCE,
+      "the detector must not fire on providers that agree with the market");
   });
 });

@@ -218,6 +218,57 @@ CREATE INDEX IF NOT EXISTS payments_ts ON payments (ts DESC);
 CREATE UNIQUE INDEX IF NOT EXISTS payments_txid_unique ON payments (txid) WHERE txid <> '';
 `;
 
+/**
+ * node-postgres returns BIGINT as a *string*, and does so deliberately: an int8
+ * can exceed Number.MAX_SAFE_INTEGER, and silently losing precision would be
+ * worse than a type surprise. Every int8 in this schema is either a
+ * micro-denominated amount or a unix timestamp, both far inside the safe range,
+ * so coercing at this boundary is safe and lets the rest of the codebase work
+ * in numbers.
+ *
+ * This is not cosmetic tidying. `computeConsistency` guards its input with
+ * `typeof r.claimed_ts === "number"`, so a string claimed_ts made every sample
+ * unusable — no cohort ever reached three providers, no divergence was ever
+ * computed, and the cross-provider forger detector did nothing at all in
+ * production while passing every test against the in-memory store, which keeps
+ * numbers. A feature that is documented, tested and silently inert is worse
+ * than one that is missing, so the fix belongs here at the edge rather than as
+ * a defensive coercion deeper in.
+ */
+function num(v: unknown): number {
+  return typeof v === "number" ? v : Number(v ?? 0);
+}
+
+function toSampleRow(row: Record<string, unknown>): SampleRow {
+  return {
+    ...(row as unknown as SampleRow),
+    ts: new Date(row.ts as string),
+    http_status: num(row.http_status),
+    latency_ms: num(row.latency_ms),
+    stale_s: num(row.stale_s),
+    price: num(row.price),
+    claimed_ts: num(row.claimed_ts),
+  };
+}
+
+function toClaimRow(row: Record<string, unknown>): ClaimRow {
+  return {
+    ...(row as unknown as ClaimRow),
+    ts: new Date(row.ts as string),
+    refund_micro: num(row.refund_micro),
+    slash_micro: num(row.slash_micro),
+    age_s: num(row.age_s),
+  };
+}
+
+function toPaymentRow(row: Record<string, unknown>): PaymentRow {
+  return {
+    ...(row as unknown as PaymentRow),
+    ts: new Date(row.ts as string),
+    amount_micro: num(row.amount_micro),
+  };
+}
+
 function percentile(values: number[], p: number): number {
   if (values.length === 0) return 0;
   const sorted = [...values].sort((a, b) => a - b);
@@ -434,7 +485,7 @@ class PostgresStore implements Store {
       "SELECT count(*)::int AS n FROM claims WHERE provider=$1",
       [provider],
     );
-    const rows = (r.rows as SampleRow[]).map(row => ({ ...row, ts: new Date(row.ts) }));
+    const rows = r.rows.map(toSampleRow);
     return aggregateFromRows(rows, c.rows[0]?.n ?? 0);
   }
 
@@ -443,7 +494,7 @@ class PostgresStore implements Store {
       `SELECT * FROM samples WHERE ts >= now() - ($1 || ' hours')::interval`,
       [String(windowHours)],
     );
-    return (r.rows as SampleRow[]).map(row => ({ ...row, ts: new Date(row.ts) }));
+    return r.rows.map(toSampleRow);
   }
 
   async recentSamples(provider: string, limit: number): Promise<SampleRow[]> {
@@ -451,17 +502,17 @@ class PostgresStore implements Store {
       "SELECT * FROM samples WHERE provider=$1 ORDER BY ts DESC LIMIT $2",
       [provider, limit],
     );
-    return (r.rows as SampleRow[]).map(row => ({ ...row, ts: new Date(row.ts) }));
+    return r.rows.map(toSampleRow);
   }
 
   async listClaims(limit: number): Promise<ClaimRow[]> {
     const r = await this.pool.query("SELECT * FROM claims ORDER BY ts DESC LIMIT $1", [limit]);
-    return (r.rows as ClaimRow[]).map(row => ({ ...row, ts: new Date(row.ts) }));
+    return r.rows.map(toClaimRow);
   }
 
   async listPayments(limit: number): Promise<PaymentRow[]> {
     const r = await this.pool.query("SELECT * FROM payments ORDER BY ts DESC LIMIT $1", [limit]);
-    return (r.rows as PaymentRow[]).map(row => ({ ...row, ts: new Date(row.ts) }));
+    return r.rows.map(toPaymentRow);
   }
 
   async countPayments(): Promise<{ count: number; totalMicro: number }> {
