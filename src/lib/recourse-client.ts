@@ -255,6 +255,30 @@ export function exploreAllowance(coverageCalls: number): number {
 }
 
 /**
+ * How lopsided the evidence base may get before the agent deliberately buys
+ * from someone other than the best provider.
+ *
+ * Eight to one is a deliberate compromise. Lower wastes money re-testing
+ * providers already known to be worse; higher lets the market go dark. At this
+ * ratio the leader still takes the large majority of traffic, while every other
+ * eligible provider keeps enough recent observations to be cross-checked
+ * against — which is what the consistency detector needs to function at all.
+ */
+export const MONITOR_RATIO = 8;
+
+/**
+ * True when the evidence base has become lopsided enough that the agent should
+ * spend a call on someone other than the leader.
+ *
+ * Stateless on purpose: it reads the sample counts the agent already has rather
+ * than tracking a cadence, so it self-corrects after a gap in trading and there
+ * is no counter to get out of step with reality.
+ */
+export function needsMonitoring(leaderSamples: number, laggardSamples: number): boolean {
+  return leaderSamples > laggardSamples * MONITOR_RATIO;
+}
+
+/**
  * The assets this agent will spend, with a hard per-payment ceiling.
  *
  * Entries are matched against the network string the resource server actually
@@ -747,15 +771,44 @@ export function selectProvider(scores: ScoreRecord[]): Selection {
 
   // Rank on the lower bound, not the point estimate: between two providers that
   // both show 100%, prefer the one with more evidence behind it.
-  const chosen = eligible.reduce((a, b) => {
+  const leader = eligible.reduce((a, b) => {
     if (b.reliability_lower_bound !== a.reliability_lower_bound) {
       return b.reliability_lower_bound > a.reliability_lower_bound ? b : a;
     }
     return b.coverage_calls > a.coverage_calls ? b : a;
   });
+
+  // Pure exploitation makes the market unobservable, which is the one condition
+  // a forger needs. Cross-provider consistency is a statement about
+  // disagreement, so it can only be computed from observations of several
+  // providers at the same moment — buy only from the leader and there is
+  // nothing to disagree with, and a provider lying about time becomes
+  // undetectable rather than merely unproven.
+  //
+  // It is also the only way a leader that quietly degrades is ever re-checked,
+  // and the only way a provider whose evidence is thin can ever stop being
+  // thin. So the agent keeps the evidence base from becoming more lopsided
+  // than MONITOR_RATIO to one, and spends the difference deliberately.
+  const others = eligible.filter(s => s.provider !== leader.provider);
+  if (others.length > 0) {
+    const laggard = others.reduce((a, b) =>
+      a.observed.samples <= b.observed.samples ? a : b,
+    );
+    if (needsMonitoring(leader.observed.samples, laggard.observed.samples)) {
+      return {
+        chosen: laggard,
+        reason:
+          `monitoring — ${leader.label} has ${leader.observed.samples} samples to ` +
+          `${laggard.label}'s ${laggard.observed.samples}; buying from one provider ` +
+          `only would leave nothing to cross-check it against`,
+        candidates,
+      };
+    }
+  }
+
   return {
-    chosen,
-    reason: `best of ${eligible.length} eligible — ≥${(chosen.reliability_lower_bound * 100).toFixed(0)}% at 95%, ${chosen.coverage_calls} claims covered`,
+    chosen: leader,
+    reason: `best of ${eligible.length} eligible — ≥${(leader.reliability_lower_bound * 100).toFixed(0)}% at 95%, ${leader.coverage_calls} claims covered`,
     candidates,
   };
 }

@@ -285,6 +285,14 @@ evidence, and conflating them is how new providers get frozen out.
 its *bond* — not a reputation it cannot yet have — is what protects the buyer. A
 thin bond buys proportionally less rope.
 
+**And exploration never stops entirely.** Buying only from the current leader
+would make the market unobservable — consistency is a statement about
+disagreement, so with one provider sampled there is nothing to disagree with,
+and a provider lying about time becomes undetectable rather than merely
+unproven. The agent keeps the evidence base within 8:1 and spends the difference
+deliberately. It is also the only way a leader that quietly degrades is ever
+re-checked.
+
 **Volume is not evidence — counterparties are.** A provider can pay itself all
 day, and on a public chain that costs it only fees. So self-payments are
 excluded outright rather than discounted, and confidence is capped at `medium`

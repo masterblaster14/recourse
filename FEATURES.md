@@ -66,6 +66,7 @@ Algorand Python (`algopy`), compiled to TEAL, deployed to TestNet.
 | ✅ | **Human approval above a threshold** | Routine calls are autonomous; anything unusually large stops and asks |
 | ✅ | **On-chain settlement verification** | Confirms the facilitator's reported txid really moved that asset, amount, sender and receiver |
 | ✅ | Bond-scaled exploration | A thin bond buys proportionally less rope |
+| ✅ | **Monitoring floor** | The agent will not let the evidence base get more lopsided than 8:1. Buying only from the leader leaves nothing to cross-check it against, which is the one condition a forger needs |
 | ✅ | Failure attribution | Payment-layer failures are discarded, never charged to a provider |
 | ❌ | Reasoning-trace capture / intent inference | Needs a model and trace collection. The deterministic half of agent safety is built; judging *why* an agent misbehaved is a different product. |
 
@@ -111,7 +112,7 @@ Algorand Python (`algopy`), compiled to TEAL, deployed to TestNet.
 
 | | Feature | Notes |
 |:--:|---|---|
-| ✅ | 146 unit tests | Signing, scoring, routing, box decoding, consistency, payee refusal, spend policy, resource binding, canonicalisation interop |
+| ✅ | 154 unit tests | Signing, scoring, routing, box decoding, consistency, payee refusal, spend policy, resource binding, canonicalisation interop |
 | ✅ | 9 on-chain guard checks | Adversarial, against the deployed contract |
 | ✅ | Refusal-path testing | Tests assert what is *rejected*, not only what works |
 | ✅ | **Published-attack audit** | All five attacks from the x402 formal analysis checked against this code — see [SECURITY.md](SECURITY.md) |

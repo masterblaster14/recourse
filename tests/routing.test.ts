@@ -5,7 +5,12 @@
  */
 import { test, describe } from "node:test";
 import assert from "node:assert/strict";
-import { selectProvider, EXPLORE_SAMPLES } from "../src/lib/recourse-client.ts";
+import {
+  selectProvider,
+  EXPLORE_SAMPLES,
+  needsMonitoring,
+  MONITOR_RATIO,
+} from "../src/lib/recourse-client.ts";
 import type { ScoreRecord } from "../src/lib/scoring.ts";
 
 function provider(over: Partial<ScoreRecord> & { provider: string }): ScoreRecord {
@@ -105,8 +110,12 @@ describe("selectProvider", () => {
   });
 
   test("ranks on the lower bound, so more evidence wins a tie on pass rate", () => {
-    const thin = measured("THIN", 16, 0.81, "caution");
+    // Sample counts deliberately kept inside MONITOR_RATIO of each other. The
+    // monitoring floor pre-empts ranking by design, so a wider spread here
+    // would test that instead and quietly stop covering the ranking rule.
+    const thin = measured("THIN", 30, 0.81, "caution");
     const thick = measured("THICK", 200, 0.98, "buy");
+    assert.ok(200 / 30 < MONITOR_RATIO, "fixture must not trip the monitoring floor");
     assert.equal(selectProvider([thin, thick]).chosen?.provider, "THICK");
   });
 
@@ -122,5 +131,81 @@ describe("selectProvider", () => {
     const s = selectProvider([provider({ provider: "A" }), measured("B", 40, 0, "avoid")]);
     assert.equal(s.candidates.length, 2);
     for (const c of s.candidates) assert.ok(c.reason.length > 0);
+  });
+});
+
+/**
+ * Exploitation alone makes the market unobservable.
+ *
+ * Cross-provider consistency is a statement about *disagreement*, so it can
+ * only be computed from observations of several providers covering the same
+ * moment. An agent that buys only from the current leader has nothing to
+ * cross-check against, and a provider lying about time stops being merely
+ * unproven and becomes undetectable.
+ *
+ * This is not hypothetical. In production the leader reached 181 samples while
+ * two eligible providers sat frozen at 6 — one of them the forger — and every
+ * provider reported divergence_checked = 0.
+ *
+ * The floor is stateless by design: it reads sample counts the agent already
+ * has rather than tracking a cadence, so it self-corrects after a gap in
+ * trading instead of drifting out of step.
+ */
+describe("monitoring floor", () => {
+  test("triggers once the evidence base is more lopsided than the ratio", () => {
+    assert.equal(needsMonitoring(181, 6), true);
+    assert.equal(needsMonitoring(49, 6), true);
+  });
+
+  test("stays quiet while the spread is reasonable", () => {
+    assert.equal(needsMonitoring(48, 6), false);
+    assert.equal(needsMonitoring(10, 10), false);
+    assert.equal(needsMonitoring(6, 6), false);
+  });
+
+  test("a provider with nothing at all is always worth a look", () => {
+    assert.equal(needsMonitoring(1, 0), true);
+  });
+
+  test("the agent buys from the laggard, not the leader, when it fires", () => {
+    const leader = measured("LEADER", 181, 0.98, "buy");
+    const laggard = measured("LAGGARD", 6, 0.61, "unrated");
+    const s = selectProvider([leader, laggard]);
+    assert.equal(s.chosen?.provider, "LAGGARD");
+    assert.match(s.reason, /monitoring/);
+    // Monitoring is a purchase, not an exclusion — the leader stays eligible.
+    assert.equal(s.candidates.find(c => c.provider === "LEADER")?.eligible, true);
+  });
+
+  test("it picks the least-measured of several laggards", () => {
+    const s = selectProvider([
+      measured("LEADER", 181, 0.98, "buy"),
+      measured("MID", 20, 0.7, "caution"),
+      measured("THINNEST", 6, 0.61, "unrated"),
+    ]);
+    assert.equal(s.chosen?.provider, "THINNEST");
+  });
+
+  test("with the spread closed it goes back to buying the best", () => {
+    const s = selectProvider([
+      measured("LEADER", 40, 0.98, "buy"),
+      measured("LAGGARD", 30, 0.61, "unrated"),
+    ]);
+    assert.equal(s.chosen?.provider, "LEADER");
+    assert.match(s.reason, /best of/);
+  });
+
+  test("it never resurrects a provider the agent has ruled out", () => {
+    // Monitoring must not become a back door that sends money to a provider
+    // already excluded for being unbonded or proven bad.
+    const dead = measured("DRAINED", 6, 0, "avoid");
+    const s = selectProvider([measured("LEADER", 181, 0.98, "buy"), dead]);
+    assert.equal(s.chosen?.provider, "LEADER");
+    assert.equal(s.candidates.find(c => c.provider === "DRAINED")?.eligible, false);
+  });
+
+  test("a lone eligible provider is still bought from", () => {
+    const s = selectProvider([measured("ONLY", 181, 0.98, "buy")]);
+    assert.equal(s.chosen?.provider, "ONLY");
   });
 });
