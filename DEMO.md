@@ -75,6 +75,23 @@ system can take its money — and it is the most important thing in the demo.
 
 ---
 
+### And a fifth card that is not ours
+
+The dashboard lists a fifth provider marked **Independent · not ours**. That is
+an unrelated wallet that registered itself through the CLI, with its own price
+and its own staleness bound, and staked its own bond. Nobody approved it —
+`register` and `deposit_bond` key off `Txn.sender`, so the registry has no admin
+who *could* approve or refuse anyone.
+
+It shows facts and no reliability score, because we have never bought from it. A
+registry listing is not evidence about anybody's uptime, and inventing a number
+there would be exactly the dishonesty this project argues against.
+
+If someone asks whether anyone else can join: that card is the answer, and
+`npm run provider:register` is how they did it.
+
+---
+
 ## The demo, step by step
 
 ### Step 1 — show that paying is real (20 seconds)
@@ -181,6 +198,27 @@ Scroll to **The live x402 market**.
 > The busiest one has taken seventy-five thousand payments. If any of those
 > responses were junk, that money was simply gone. That's the gap, and it's not
 > hypothetical."
+
+---
+
+## The panel to point at
+
+The **What the agent is doing** card at the top fills in live, one purchase at a
+time. Seven stages, and the three worth narrating are the ones that are usually
+invisible:
+
+| Stage | What to say |
+|---|---|
+| **1 · Buy the risk data** | "It pays for the reputation record *before* it spends anything on data. Risk assessment is itself a paid machine-to-machine service." |
+| **3 · Check the bill before paying it** | "It reads the 402 and refuses if the payee is not the party whose collateral it checked. If that fails, no transaction is ever built — the money never moves." |
+| **5 · Confirm the money actually moved** | "The facilitator said it settled. The agent doesn't believe it — it looks the transaction up on chain itself. Right asset, right amount, from us, to them." |
+
+Stage 7 stays greyed out and reads *"nothing to claim"* on a clean call. That is
+the good outcome, and it is worth saying out loud: most calls are honest, and
+the system says so plainly rather than manufacturing drama.
+
+When Northwind is caught, stage 7 lights up with the refund, the penalty and the
+transaction that moved them.
 
 ---
 
