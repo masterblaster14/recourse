@@ -78,7 +78,8 @@ Algorand Python (`algopy`), compiled to TEAL, deployed to TestNet.
 | ✅ | `unrated` as a distinct verdict | "Not enough evidence" is not the same as "bad" |
 | ✅ | Proven claims short-circuit | One upheld claim is a fact, not a sample |
 | ✅ | Bond coverage | `coverage_calls` — how many failures the collateral can actually pay for |
-| ✅ | **Cross-provider price consistency** | Catches a forger that passes every cryptographic check |
+| ✅ | **Cross-provider price consistency** | Catches a forger that passes every cryptographic check. Verified live: forger at 1.13% divergence against a 0.4% tolerance, both honest providers under 0.15% |
+| ✅ | **Conclusive divergence is a verdict, not silence** | A measured forger reads `avoid`, never `unrated` — `unrated` is reserved for providers with too little evidence, and a caught one has plenty |
 | ✅ | Evidence never slashes | Statistical findings cap the score; only proof takes collateral |
 | ✅ | **Counterparty-weighted reputation** | Distinct payers, not raw volume. Self-payments excluded outright; confidence capped at `medium` while every observation traces to one payer |
 | ❌ | Data-correctness verification | Impossible without an external reference; scoped out explicitly |
@@ -110,11 +111,12 @@ Algorand Python (`algopy`), compiled to TEAL, deployed to TestNet.
 
 | | Feature | Notes |
 |:--:|---|---|
-| ✅ | 136 unit tests | Signing, scoring, routing, box decoding, consistency, payee refusal, spend policy, resource binding, canonicalisation interop |
+| ✅ | 146 unit tests | Signing, scoring, routing, box decoding, consistency, payee refusal, spend policy, resource binding, canonicalisation interop |
 | ✅ | 9 on-chain guard checks | Adversarial, against the deployed contract |
 | ✅ | Refusal-path testing | Tests assert what is *rejected*, not only what works |
 | ✅ | **Published-attack audit** | All five attacks from the x402 formal analysis checked against this code — see [SECURITY.md](SECURITY.md) |
 | ✅ | **Settlement-shape regression tests** | algod and indexer name the same fields differently; a crossed-over read failed silently. Both shapes pinned offline |
+| ✅ | **Postgres BIGINT coercion tests** | `claimed_ts` arriving as a string made every sample unusable and left the forger detector inert in production while all tests passed against the in-memory store |
 | ✅ | CI on push | GitHub Actions: typecheck + unit suite on every push and PR |
 
 ## 8. Attack surface — the published analyses
