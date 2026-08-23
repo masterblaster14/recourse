@@ -65,7 +65,7 @@ npm install && npm run test:chain
 
 | Criterion | Where it is |
 |---|---|
-| x402 payment flow **live on Algorand TestNet** | [live API](https://recourse-api-production.up.railway.app/health) · 4 bonded providers, 5 paid routes |
+| x402 payment flow **live on Algorand TestNet** | [live API](https://recourse-api-production.up.railway.app/health) · 5 bonded providers, 5 paid routes |
 | **An actual x402 transaction** viewable on Lora | proof table below — payment, bond, claim, all linked |
 | Payment settles through the **GoPlausible facilitator** | [`src/x402.ts`](src/x402.ts) — `HTTPFacilitatorClient`, fee payer visible in every 402 |
 | **`@x402` AVM dependencies** in `package.json` | `@x402/avm` `@x402/core` `@x402/hono` `@x402/fetch` `@x402-avm/extensions` |
@@ -470,7 +470,7 @@ agent could pay right now — and cross-references each recipient against the
 Recourse registry on chain. At the time of writing:
 
 ```
-300 endpoints indexed        2 backed by collateral        298 with no recourse
+300 endpoints indexed        4 backed by collateral        296 with no recourse
 
 busiest, with nothing standing behind them:
   x402.twit.sh/tweets/search        75,389 settlements   $0.006

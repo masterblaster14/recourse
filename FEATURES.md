@@ -144,6 +144,6 @@ posture asserted.
 2. **Forged freshness is detected, not punished.** Slashing on a statistic would be the centralised adjudication this project exists to remove.
 3. **The guarantee is capped at the live bond.** Insurance can be insolvent.
 4. **Sybil reset is cheap.** Reputation is per address; a drained provider can start over.
-5. **All four demo providers are ours.** The ecosystem view reframes it against ~296 real unbonded endpoints, but does not remove it. A fifth provider is registered by an unrelated wallet that self-enrolled through the CLI — it holds a real bond and publishes its own terms, which is why `/registry` reports five while the dashboard shows the four demo endpoints.
+5. **The four demo providers are ours.** The ecosystem view reframes it against 296 real unbonded endpoints, but does not remove it. A fifth provider is not ours — an unrelated wallet self-enrolled through the CLI with its own price and staleness bound and staked its own bond. It is listed on the dashboard as `Independent`, with facts and no reliability score, because we have never bought from it.
 6. **Observed samples are only ours.** Now surfaced by the product rather than only admitted here: every provider reads `single source — confidence capped`, and no provider can reach `high` confidence until a second independent payer appears.
 7. **Operational:** single region, no rate limiting, creator is a single hot key.
