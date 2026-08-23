@@ -829,6 +829,7 @@ agents in one process cannot spend each other's budget or halt each other.
 
 | Document | What it covers |
 |---|---|
+| [WORKFLOW.md](WORKFLOW.md) | What actually happens, step by step — provider onboarding, the agent's buy loop, how a breach is proven, and how the score feeds back into routing |
 | [SECURITY.md](SECURITY.md) | Every published x402 security consideration and all five attacks from the formal analysis, answered against this code |
 | [FEATURES.md](FEATURES.md) | Complete register of what is built, what is partial, and what is deliberately excluded |
 | [DEMO.md](DEMO.md) | Step-by-step walkthrough of the live demo |

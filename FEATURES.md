@@ -100,6 +100,7 @@ Algorand Python (`algopy`), compiled to TEAL, deployed to TestNet.
 | ✅ | Evidence ledger | `/proof`, backfilled from the database so a restart cannot erase it |
 | ✅ | Terminal demo | Same story with no UI, as a fallback |
 | ✅ | Operator tooling | `preflight`, `setup`, `topup`, `fund`, `sweep`, `readme` |
+| ✅ | **End-to-end workflow documentation** | [WORKFLOW.md](WORKFLOW.md) — four traced flows with sequence diagrams, every step cited to the code that runs it |
 | ✅ | **Provider CLI — bring your own endpoint** | `provider:init` / `provider:register` / `provider:test`. Self-service: no admin, no allow-list, no approval step |
 | ✅ | **Self-registration verified end to end** | A fresh third-party wallet registered itself on TestNet with its own terms (0.002 price, 120s staleness) and staked its own bond — registry went 4 → 5 |
 | ✅ | **Pre-flight slashability check** | `provider:test` buys one response as an agent would and reports PASS / FAIL / **SLASHABLE** before you take traffic |
