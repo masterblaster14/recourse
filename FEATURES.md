@@ -44,6 +44,8 @@ Algorand Python (`algopy`), compiled to TEAL, deployed to TestNet.
 | ✅ | Server-side payment recording | Any buyer's settled payment is booked, not just our own agent's |
 | ✅ | Settled-txid uniqueness | A repeated settlement id is rejected, not silently double-counted |
 | ✅ | Transport hardening | HSTS, nosniff, no-referrer on every response |
+| ✅ | **Paid-response cache isolation** | `no-store, private` on every paid route, set by us rather than inherited from the SDK — verified on a real settled 200, not just a 402 |
+| ✅ | **Payee-collision guard** | Two paid routes sharing a `payTo` would make their payments interchangeable; `buildRoutes()` refuses to start |
 | ✅ | Canonical-JSON interop | Matches `payment-requirements-hash.v1` on all 6 published vectors |
 
 ## 3. The buying agent
@@ -103,10 +105,27 @@ Algorand Python (`algopy`), compiled to TEAL, deployed to TestNet.
 
 | | Feature | Notes |
 |:--:|---|---|
-| ✅ | 102 unit tests | Signing, scoring, routing, box decoding, consistency, payee refusal, spend policy, canonicalisation interop |
+| ✅ | 110 unit tests | Signing, scoring, routing, box decoding, consistency, payee refusal, spend policy, resource binding, canonicalisation interop |
 | ✅ | 9 on-chain guard checks | Adversarial, against the deployed contract |
 | ✅ | Refusal-path testing | Tests assert what is *rejected*, not only what works |
+| ✅ | **Published-attack audit** | All five attacks from the x402 formal analysis checked against this code — see [SECURITY.md](SECURITY.md) |
 | ✅ | CI on push | GitHub Actions: typecheck + unit suite on every push and PR |
+
+## 8. Attack surface — the published analyses
+
+Walked item by item in [SECURITY.md](SECURITY.md), with code cited rather than
+posture asserted.
+
+| | Item | Notes |
+|:--:|---|---|
+| ✅ | Revert-grant (I‑A) | N/A — Algorand has immediate finality, and the paywall settles before releasing the body |
+| ✅ | Settlement preemption (I‑B) | Closed by the AVM group: the agent's transfer is fee-0 and group-bound to a transaction only the facilitator can sign |
+| ✅ | Replay (II) | Duplicate txid rejected by the chain, plus settle-before-release |
+| 🟡 | Resource binding (II) | No resource travels in the transaction; distinct payees provide it, now asserted at startup instead of assumed |
+| ✅ | Cache leakage (III) | Found as a real gap and fixed — `no-store` on paid routes |
+| ✅ | Server selection (IV) | The thesis: Sybils cost collateral |
+| ❌ | Paid-but-silent | The one open case; needs the challenge window |
+| ❌ | Confirmation-depth gate | Deliberately not built — meaningless on a chain without reorgs |
 
 ---
 

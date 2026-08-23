@@ -19,7 +19,7 @@ import { providers, slaFor } from "./lib/providers.ts";
 import { adminRoutes } from "./routes/admin.ts";
 import { paidRoutes } from "./routes/paid.ts";
 import { publicRoutes } from "./routes/public.ts";
-import { buildPaymentMiddleware, decodeSettleHeader } from "./x402.ts";
+import { buildPaymentMiddleware, decodeSettleHeader, paidPaths } from "./x402.ts";
 import { slaHash } from "./lib/signing.ts";
 
 const app = new Hono();
@@ -34,12 +34,27 @@ app.use("*", cors({ origin: "*", exposeHeaders: ["PAYMENT-RESPONSE", "PAYMENT-RE
  * be silently available. The response signature is the real defence — it makes
  * interception detectable rather than merely unlikely — but HSTS removes the
  * easy attack for anything that reaches us over a browser.
+ *
+ * Paid responses additionally get `no-store`. The x402 SDK appends `private`
+ * after settlement, which does stop a shared cache holding paid content — but
+ * it is the SDK's choice rather than ours, it would vanish silently if that
+ * default ever changed, and it still permits a browser or intermediate tool to
+ * keep a copy of something somebody paid for. `no-store` is the directive that
+ * says what we actually mean. `private` is kept alongside it so nothing the SDK
+ * intended is thrown away.
+ *
+ * This runs after the paywall's own post-handler code, so it is the last word
+ * on the header. Free routes are left alone — the dashboard and the public
+ * directory are meant to be cacheable.
  */
 app.use("*", async (c, next) => {
   await next();
   c.header("Strict-Transport-Security", "max-age=31536000; includeSubDomains");
   c.header("X-Content-Type-Options", "nosniff");
   c.header("Referrer-Policy", "no-referrer");
+  if (paidPaths().has(new URL(c.req.url).pathname)) {
+    c.header("Cache-Control", "no-store, private");
+  }
 });
 if (process.env.NODE_ENV !== "production") app.use("*", logger());
 

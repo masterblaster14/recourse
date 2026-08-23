@@ -296,6 +296,15 @@ them properly and names the others rather than gesturing at them.
 | The seller withholds a response entirely | counterparty risk | **No.** No signature, no proof. Specified as v2 below. |
 | **A compromised endpoint swaps the payee** | buyer-side control | **Yes.** See below. |
 | A hostile 402 demands far more than the list price | buyer-side control | **Yes.** Spend controls, enforced client-side. |
+| An interceptor **cashes the payment first**, so the buyer pays and is refused | protocol | **Closed by the scheme.** The AVM payload is an atomic group whose fee-paying half only the endorsed facilitator can sign. |
+| One payment **replayed** for many responses | protocol | **Yes.** The chain rejects a duplicate txid, and the paywall settles before it releases the body. |
+| Paid content **cached** and served to someone who never paid | protocol | **Yes.** `no-store` on every paid route, set by us rather than inherited. |
+| Data released before payment is **final**, then reversed | protocol | **Not applicable.** Algorand blocks are final when certified; there is no reorg to wait out. |
+
+All five attacks from the published formal analysis
+([*Five Attacks on x402*](https://arxiv.org/abs/2605.11781)) are walked
+line-by-line against this code in **[SECURITY.md](SECURITY.md)** — four
+structurally closed, one gap found and fixed, one honestly open.
 
 ### The agent polices itself
 
@@ -704,7 +713,7 @@ npm start                 # http://localhost:3000
 Run the tests:
 
 ```bash
-npm test              # 102 unit tests, no network
+npm test              # 110 unit tests, no network
 npm run test:chain    # adversarial checks against the deployed contract
 ```
 
@@ -744,6 +753,15 @@ src/agent/runner.ts              the buying agent loop
 src/routes/                      paid, public and admin routes
 public/                          dashboard
 ```
+
+## Further reading
+
+| Document | What it covers |
+|---|---|
+| [SECURITY.md](SECURITY.md) | Every published x402 security consideration and all five attacks from the formal analysis, answered against this code |
+| [FEATURES.md](FEATURES.md) | Complete register of what is built, what is partial, and what is deliberately excluded |
+| [DEMO.md](DEMO.md) | Step-by-step walkthrough of the live demo |
+| [DEPLOY.md](DEPLOY.md) | Deployment and operator runbook |
 
 ## Licence
 

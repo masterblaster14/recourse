@@ -83,6 +83,58 @@ const feedDiscovery = declareDiscoveryExtension({
   },
 });
 
+/**
+ * Two paid routes must never share a payee.
+ *
+ * The AVM `exact` scheme verifies receiver, amount, asset and network — but
+ * nothing in the signed transaction names the *resource* it was quoted for.
+ * What actually stops a payment quoted for /score being spent on /feed is that
+ * the two demand different receivers, so the facilitator's `receiver !==
+ * requirements.payTo` check rejects the substitution.
+ *
+ * That makes resource binding a property of our address layout rather than of
+ * the protocol, and a property nobody stated is a property nobody maintains.
+ * Two routes sharing a payTo at the same price would be freely
+ * interchangeable — so this is asserted at startup instead of assumed.
+ *
+ * Unset addresses are skipped: a half-configured environment is preflight's
+ * problem, not a payee collision.
+ */
+export function payeeCollisions(routes: Record<string, unknown>): string[] {
+  const seen = new Map<string, string>();
+  const collisions: string[] = [];
+
+  for (const [route, cfg] of Object.entries(routes)) {
+    const accepts = (cfg as { accepts?: { payTo?: string }[] }).accepts ?? [];
+    for (const a of accepts) {
+      if (!a.payTo) continue;
+      const prior = seen.get(a.payTo);
+      if (prior && prior !== route) {
+        collisions.push(`${prior} and ${route} both pay ${a.payTo}`);
+      } else {
+        seen.set(a.payTo, route);
+      }
+    }
+  }
+  return collisions;
+}
+
+/**
+ * The paths behind the paywall, derived from the route table rather than
+ * hand-listed, so the two cannot drift apart.
+ */
+let _paidPaths: Set<string> | null = null;
+export function paidPaths(): Set<string> {
+  if (!_paidPaths) {
+    _paidPaths = new Set(
+      Object.keys(buildRoutes())
+        .map(key => key.split(" ")[1] ?? "")
+        .filter(Boolean),
+    );
+  }
+  return _paidPaths;
+}
+
 export function buildRoutes(): RoutesConfig {
   const routes: Record<string, unknown> = {
     "GET /score": {
@@ -125,6 +177,14 @@ export function buildRoutes(): RoutesConfig {
       tags: ["x402", "price-feed", "algorand", "bonded"],
       extensions: feedDiscovery,
     };
+  }
+
+  const collisions = payeeCollisions(routes);
+  if (collisions.length > 0) {
+    throw new Error(
+      `paid routes share a payee, so a payment quoted for one is spendable on ` +
+        `the other: ${collisions.join("; ")}`,
+    );
   }
 
   return routes as RoutesConfig;
