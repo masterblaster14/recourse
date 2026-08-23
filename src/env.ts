@@ -62,6 +62,13 @@ export const env = {
   providerDMnemonic: opt("PROVIDER_D_MNEMONIC"),
   providerDSigningSk: opt("PROVIDER_D_SIGNING_SK"),
 
+  /** Total an agent session may spend before it stops itself, micro units. */
+  sessionBudgetMicro: num("AGENT_SESSION_BUDGET_MICRO", 250_000),
+  maxPaymentsPerMinute: num("AGENT_MAX_PAYMENTS_PER_MINUTE", 60),
+  /** Hosts the agent may pay at all. Empty means no host restriction. */
+  allowedHosts: opt("AGENT_ALLOWED_HOSTS", "")
+    .split(",").map(h => h.trim()).filter(Boolean),
+
   agentAddress: opt("AGENT_ADDRESS"),
   agentMnemonic: opt("AGENT_MNEMONIC"),
 

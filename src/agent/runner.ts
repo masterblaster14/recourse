@@ -28,7 +28,12 @@ import {
   type DemoProvider,
 } from "../lib/providers.ts";
 import { slaHash } from "../lib/signing.ts";
-import { agentClient, selectProvider, type RecourseClient } from "../lib/recourse-client.ts";
+import {
+  agentClient,
+  PolicyViolation,
+  selectProvider,
+  type RecourseClient,
+} from "../lib/recourse-client.ts";
 import { allScores, invalidateScore, scoreFor } from "../lib/service.ts";
 
 export type DemoOptions = {
@@ -150,6 +155,14 @@ export async function runDemo(opts: DemoOptions = {}): Promise<DemoSummary> {
   };
 
   const client: RecourseClient = agentClient();
+  client.resetLedger();
+  log(
+    "info",
+    `agent policy — max ${fromMicro(client.policy.maxPerPaymentMicro)} per payment, ` +
+      `${fromMicro(client.policy.sessionBudgetMicro)} session budget, ` +
+      `${client.policy.maxPaymentsPerMinute}/min` +
+      (client.policy.allowedHosts.length ? `, hosts: ${client.policy.allowedHosts.join(", ")}` : ""),
+  );
   const successBuffer = new Map<string, number>();
   let lastChosen: string | null = null;
 
@@ -367,6 +380,13 @@ export async function runDemo(opts: DemoOptions = {}): Promise<DemoSummary> {
     publish({ type: "demo:end", runId, at: now(), summary });
     return summary;
   } catch (err) {
+    // A policy stop is the agent protecting its owner, not a crash. It ends the
+    // run deliberately and says which rule fired.
+    if (err instanceof PolicyViolation) {
+      log("warn", `agent stopped itself — ${err.message}`);
+      publish({ type: "demo:end", runId, at: now(), summary });
+      return summary;
+    }
     const message = String((err as Error)?.message ?? err);
     publish({ type: "demo:error", runId, at: now(), message });
     throw err;

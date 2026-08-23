@@ -288,7 +288,8 @@ them properly and names the others rather than gesturing at them.
 
 | Threat | Layer | Covered here? |
 |---|---|---|
-| The agent goes rogue, or is prompt-injected into buying something | agent-behaviour risk | **No.** Different problem, needs reasoning-trace capture. [x402-secure](https://github.com/t54-labs/x402-secure) does this well and composes with us. |
+| The agent goes rogue, or is prompt-injected into **spending too much** | agent-behaviour risk | **Yes, the deterministic half.** Session budget, rate limit, host allow-list, per-payment cap, self-halt — see below. |
+| Judging **why** an agent misbehaved (was that reasoning chain manipulated?) | agent-behaviour risk | **No.** Needs trace capture and a model. [x402-secure](https://github.com/t54-labs/x402-secure) does this well and composes with us. |
 | The facilitator fails, or a settlement never lands | payment rail | **No** — but a payment-layer failure is never charged to a provider's reliability, so an outage cannot tank every provider at once. |
 | The seller takes payment and delivers junk | **counterparty risk** | **Yes.** Collateral, published SLA, proof, automatic payout. |
 | The seller lies about freshness | counterparty risk | **Partly.** Detected by cross-provider consistency, scored, never slashed — it is evidence, not proof. |
@@ -296,7 +297,32 @@ them properly and names the others rather than gesturing at them.
 | **A compromised endpoint swaps the payee** | buyer-side control | **Yes.** See below. |
 | A hostile 402 demands far more than the list price | buyer-side control | **Yes.** Spend controls, enforced client-side. |
 
-### Two buyer-side controls the agent enforces itself
+### The agent polices itself
+
+A per-payment cap is not enough on its own. An agent that has been talked into
+buying something does not need to overpay once — it only needs to **keep
+paying**. So the agent carries a policy it checks against its own ledger before
+any network call, meaning a stop costs nothing and moves nothing:
+
+| Rule | Stops |
+|---|---|
+| `maxPerPaymentMicro` | one hostile 402 demanding far more than list price |
+| `sessionBudgetMicro` | a run of individually-reasonable payments — the injection shape |
+| `maxPaymentsPerMinute` | a runaway loop, bounded in time as well as money |
+| `allowedHosts` | "pay `attacker.example`" — it is not on the list, so it never happens |
+| `haltAfterConsecutiveRefusals` | systematic wrongness; the agent stops for good |
+
+Every one is deterministic, so it holds whether the agent was subverted by a
+prompt, a bug, or a bad loop — it never has to work out *why*. A breach halts
+the agent rather than skipping one call, and the run ends saying which rule
+fired.
+
+**What this deliberately does not do** is judge intent. Deciding whether a
+reasoning chain was manipulated needs trace capture and a risk model. That is a
+different product, and pretending otherwise would put an unverifiable claim in a
+project where every other claim is checkable from a terminal.
+
+### Two more controls the agent enforces itself
 
 **It refuses to pay anyone but the party whose collateral it checked.**
 An agent that looks up a provider's bond and then pays whatever address the 402
@@ -678,7 +704,7 @@ npm start                 # http://localhost:3000
 Run the tests:
 
 ```bash
-npm test              # 91 unit tests, no network
+npm test              # 100 unit tests, no network
 npm run test:chain    # adversarial checks against the deployed contract
 ```
 

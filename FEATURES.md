@@ -55,9 +55,13 @@ Algorand Python (`algopy`), compiled to TEAL, deployed to TestNet.
 | ✅ | Automatic claim filing | Constructs and submits the on-chain proof itself |
 | ✅ | **Payee verification** | Refuses to pay anyone but the party whose collateral it checked |
 | ✅ | **Spend controls** | Asset allow-list plus a hard per-payment cap, enforced client-side |
+| ✅ | **Session budget** | Total spend cap — stops a run of individually-fine payments |
+| ✅ | **Payment rate limit** | Bounds a runaway loop in time, not just in money |
+| ✅ | **Host allow-list** | "pay attacker.example" never reaches the network |
+| ✅ | **Self-halt** | A budget or host breach stops the agent for good, not just that call |
 | ✅ | Bond-scaled exploration | A thin bond buys proportionally less rope |
 | ✅ | Failure attribution | Payment-layer failures are discarded, never charged to a provider |
-| ❌ | Reasoning-trace capture | Different layer — see the security model table |
+| ❌ | Reasoning-trace capture / intent inference | Needs a model and trace collection. The deterministic half of agent safety is built; judging *why* an agent misbehaved is a different product. |
 
 ## 4. Scoring and risk
 
@@ -95,7 +99,7 @@ Algorand Python (`algopy`), compiled to TEAL, deployed to TestNet.
 
 | | Feature | Notes |
 |:--:|---|---|
-| ✅ | 91 unit tests | Signing, scoring, routing, box decoding, consistency, payee refusal |
+| ✅ | 100 unit tests | Signing, scoring, routing, box decoding, consistency, payee refusal, spend policy, canonicalisation interop |
 | ✅ | 9 on-chain guard checks | Adversarial, against the deployed contract |
 | ✅ | Refusal-path testing | Tests assert what is *rejected*, not only what works |
 | ✅ | CI on push | GitHub Actions: typecheck + unit suite on every push and PR |

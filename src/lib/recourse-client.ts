@@ -39,6 +39,60 @@ export type PaymentExpectation = {
   maxAmountMicro?: number;
 };
 
+/**
+ * The agent's own spending policy.
+ *
+ * A per-payment cap stops one hostile 402 from draining a wallet. It does
+ * nothing about the other shape of the problem: an agent talked into making ten
+ * thousand individually-reasonable payments. A compromised or prompt-injected
+ * agent does not need to overpay once — it only needs to keep paying.
+ *
+ * These limits are deliberately deterministic. Each is a number the agent
+ * checks against its own ledger before spending, so it holds whether the agent
+ * was subverted by a prompt, a bug, or a runaway loop. Judging *intent* — was
+ * that reasoning chain manipulated? — is a genuinely different problem needing
+ * trace capture and a model, and is out of scope here rather than half-answered.
+ */
+export type SpendPolicy = {
+  /** Hard ceiling on any single payment. */
+  maxPerPaymentMicro: number;
+  /** Total the agent may spend before it stops, whatever it is told to do. */
+  sessionBudgetMicro: number;
+  /** Ceiling on payment rate, so a runaway loop is bounded in time as well. */
+  maxPaymentsPerMinute: number;
+  /** Hosts the agent may pay at all. Empty means no host restriction. */
+  allowedHosts: string[];
+  /** Consecutive refusals after which the agent stops for good. */
+  haltAfterConsecutiveRefusals: number;
+};
+
+export function defaultSpendPolicy(): SpendPolicy {
+  return {
+    maxPerPaymentMicro: maxPaymentMicro(),
+    sessionBudgetMicro: env.sessionBudgetMicro,
+    maxPaymentsPerMinute: env.maxPaymentsPerMinute,
+    allowedHosts: env.allowedHosts,
+    haltAfterConsecutiveRefusals: 5,
+  };
+}
+
+/** Raised when the agent's own policy stops it, before any money moves. */
+export class PolicyViolation extends Error {
+  constructor(readonly rule: string, detail: string) {
+    super(`policy stop (${rule}): ${detail}`);
+    this.name = "PolicyViolation";
+  }
+}
+
+export type SpendLedger = {
+  spentMicro: number;
+  payments: number;
+  refusals: number;
+  consecutiveRefusals: number;
+  halted: boolean;
+  haltReason: string | null;
+};
+
 export class PaymentRefused extends Error {
   constructor(readonly detail: string) {
     super(`refused to pay: ${detail}`);
@@ -183,11 +237,18 @@ export function maxPaymentMicro(): number {
 
 export class RecourseClient {
   readonly address: string;
+  readonly policy: SpendPolicy;
   private readonly account: algosdk.Account;
   private readonly httpClient: x402HTTPClient;
   private readonly client: x402Client;
+  private readonly recentPayments: number[] = [];
+  private ledger: SpendLedger = {
+    spentMicro: 0, payments: 0, refusals: 0,
+    consecutiveRefusals: 0, halted: false, haltReason: null,
+  };
 
-  constructor(mnemonic: string) {
+  constructor(mnemonic: string, policy: SpendPolicy = defaultSpendPolicy()) {
+    this.policy = policy;
     this.account = algosdk.mnemonicToSecretKey(mnemonic);
     this.address = this.account.addr.toString();
 
@@ -212,6 +273,75 @@ export class RecourseClient {
     this.client = client;
   }
 
+  /** What the agent has spent, and whether it has stopped itself. */
+  spend(): SpendLedger {
+    return { ...this.ledger };
+  }
+
+  resetLedger(): void {
+    this.ledger = {
+      spentMicro: 0, payments: 0, refusals: 0,
+      consecutiveRefusals: 0, halted: false, haltReason: null,
+    };
+    this.recentPayments.length = 0;
+  }
+
+  private halt(rule: string, detail: string): never {
+    this.ledger.halted = true;
+    this.ledger.haltReason = rule + ": " + detail;
+    throw new PolicyViolation(rule, detail);
+  }
+
+  /**
+   * Everything the agent checks against its own ledger before spending. Runs
+   * before any network call, so a stop costs nothing and moves nothing.
+   */
+  private enforcePolicy(url: string, priceMicro: number): void {
+    const p = this.policy;
+
+    if (this.ledger.halted) {
+      throw new PolicyViolation("halted", this.ledger.haltReason ?? "agent has stopped");
+    }
+
+    if (p.allowedHosts.length > 0) {
+      let host = "";
+      try {
+        host = new URL(url).host;
+      } catch {
+        this.halt("bad-url", "cannot parse " + url);
+      }
+      if (!p.allowedHosts.includes(host)) {
+        this.halt("host-not-allowed", host + " is not on the agent's allow-list");
+      }
+    }
+
+    if (priceMicro > p.maxPerPaymentMicro) {
+      throw new PolicyViolation(
+        "per-payment-cap",
+        priceMicro + " exceeds the ceiling of " + p.maxPerPaymentMicro,
+      );
+    }
+
+    if (this.ledger.spentMicro + priceMicro > p.sessionBudgetMicro) {
+      this.halt(
+        "session-budget",
+        "spending " + priceMicro + " more would pass the budget of " +
+          p.sessionBudgetMicro + " (already spent " + this.ledger.spentMicro + ")",
+      );
+    }
+
+    const cutoff = Date.now() - 60_000;
+    while (this.recentPayments.length > 0 && this.recentPayments[0] < cutoff) {
+      this.recentPayments.shift();
+    }
+    if (this.recentPayments.length >= p.maxPaymentsPerMinute) {
+      throw new PolicyViolation(
+        "rate-limit",
+        this.recentPayments.length + " payments already in the last minute",
+      );
+    }
+  }
+
   /**
    * Pay for and fetch any x402 resource.
    *
@@ -226,6 +356,9 @@ export class RecourseClient {
    * score but is never claimable — it is not attributable to the provider.
    */
   async pay(url: string, expect: PaymentExpectation = {}): Promise<BuyResult> {
+    // Policy first: a stop here costs nothing, because nothing has happened yet.
+    this.enforcePolicy(url, expect.maxAmountMicro ?? this.policy.maxPerPaymentMicro);
+
     const started = Date.now();
     const legs: number[] = [];
     let refused = false;
@@ -274,12 +407,31 @@ export class RecourseClient {
         }
       }
 
+      if (res.ok) {
+        this.ledger.payments++;
+        this.ledger.spentMicro += expect.maxAmountMicro ?? 0;
+        this.recentPayments.push(Date.now());
+        this.ledger.consecutiveRefusals = 0;
+      }
+
       return {
         ok: res.ok, status: res.status, latencyMs, totalMs, body, settlement, refused,
         // A 402 that came back a second time means payment did not take.
         paymentFailed: !res.ok && res.status === 402,
       };
     } catch (err) {
+      // A policy stop is the agent working, not a failed purchase. It must
+      // propagate rather than be recorded as an ordinary bad response.
+      if (err instanceof PolicyViolation) throw err;
+      if (refused) {
+        this.ledger.refusals++;
+        this.ledger.consecutiveRefusals++;
+        if (this.ledger.consecutiveRefusals >= this.policy.haltAfterConsecutiveRefusals) {
+          this.ledger.halted = true;
+          this.ledger.haltReason =
+            "refused " + this.ledger.consecutiveRefusals + " payments in a row";
+        }
+      }
       const totalMs = Date.now() - started;
       return {
         ok: false,
