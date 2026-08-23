@@ -321,6 +321,8 @@ function onDemoStart(ev) {
   $("routing").className = "card";
   renderStats();
   setRunning(true);
+  state.surveyPaid = 0;
+  state.surveySpent = 0;
   flowReset();
   flowSet("survey", "active", "buying risk records…");
   $("flow-note").textContent =
@@ -345,8 +347,7 @@ function onRoute(ev) {
   state.run.calls = ev.index;
   // A new call begins: stage 1 is settled history, everything after it is fresh.
   $("flow-call").textContent = `call ${ev.index} of ${state.run.total}`;
-  flowSet("survey", "done",
-    `${ev.candidates.length} risk record${ev.candidates.length === 1 ? "" : "s"} bought`);
+  flowSet("survey", "done");
   const excluded = ev.candidates.filter(c => !c.eligible).length;
   flowSet("route", "active",
     `${ev.chosenLabel}${excluded ? `<br><span style="opacity:.7">${excluded} excluded</span>` : ""}`);
@@ -390,6 +391,19 @@ function onRoute(ev) {
 }
 
 function onPay(ev) {
+  // The agent buys risk data before it buys anything else, and both are real
+  // x402 payments. A survey purchase belongs to stage 1, not to the current
+  // call's payment — routing it through the stages below would overwrite them
+  // with another call's details and make one story impossible to follow.
+  if (ev.kind === "survey") {
+    state.surveyPaid = (state.surveyPaid ?? 0) + (ev.settled ? 1 : 0);
+    state.surveySpent = (state.surveySpent ?? 0) + (ev.settled ? ev.amountMicro : 0);
+    flowSet("survey", "active",
+      `${state.surveyPaid} bought · ${fmt(micro(state.surveySpent))} ${state.asset}`);
+    onPayBookkeeping(ev);
+    return;
+  }
+
   // Stage 3: the agent read the 402 before building anything. A refusal here is
   // the control working, so it is shown as a red stop rather than a failure.
   if (ev.refused) {
@@ -422,6 +436,11 @@ function onPay(ev) {
     flowSet("settle", "skip", "—");
   }
 
+  onPayBookkeeping(ev);
+}
+
+/** Run totals and the feed row. Every settled payment counts, survey or not. */
+function onPayBookkeeping(ev) {
   if (ev.settled) {
     state.run.paid++;
     state.run.spent += ev.amountMicro;

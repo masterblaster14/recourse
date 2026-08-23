@@ -117,6 +117,10 @@ async function marketSurvey(
       provider: env.treasuryAddress, label: `Recourse /score — ${p.label}`,
       resource: `${baseUrl}/score?provider=${p.address}`,
       amountMicro: env.scorePriceMicro, txid, settled: Boolean(txid),
+      kind: "survey",
+      latencyMs: receipt.latencyMs,
+      settlementVerified: receipt.settlementCheck?.verified,
+      settlementReason: receipt.settlementCheck?.reason,
     });
     if (record) {
       publish({
@@ -243,7 +247,7 @@ export async function runDemo(opts: DemoOptions = {}): Promise<DemoSummary> {
           type: "pay", at: now(), runId, index: i,
           provider: chosen.provider, label: chosen.label,
           resource: endpoint, amountMicro: 0, txid: null, settled: false,
-          refused: true, refusedReason: result.error,
+          kind: "resource", refused: true, refusedReason: result.error,
         });
       }
       const settledTx = result.settlement?.transaction ?? null;
@@ -270,6 +274,7 @@ export async function runDemo(opts: DemoOptions = {}): Promise<DemoSummary> {
         provider: chosen.provider, label: chosen.label,
         resource: endpoint, amountMicro: chosen.price_micro,
         txid: settledTx, settled: Boolean(settledTx),
+        kind: "resource",
         latencyMs: result.latencyMs,
         settlementVerified: result.settlementCheck?.verified,
         settlementReason: result.settlementCheck?.reason,

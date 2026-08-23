@@ -19,7 +19,14 @@ export type RecourseEvent =
       /** Independent on-chain confirmation of the facilitator's reported txid. */
       settlementVerified?: boolean; settlementReason?: string;
       /** Round trip for the paid request, settlement included. */
-      latencyMs?: number }
+      latencyMs?: number;
+      /**
+       * Which half of the loop this payment belongs to. The agent buys risk
+       * data before it buys anything else, and both are real x402 payments —
+       * but a survey purchase is not the current call's resource purchase, and
+       * a reader following one call needs to be able to tell them apart.
+       */
+      kind?: "survey" | "resource" }
   | { type: "verify"; at: string; runId: string; index: number; provider: string; label: string;
       pass: boolean; checks: CheckResult[]; latencyMs: number; totalMs: number; staleS: number }
   | { type: "claim"; at: string; runId: string; provider: string; label: string;
