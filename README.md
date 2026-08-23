@@ -281,6 +281,49 @@ npm run demo -- --calls 30      # same run, streamed to your terminal
 
 ---
 
+## The security model, and where Recourse sits in it
+
+Agent payments have several distinct threat surfaces. Recourse covers one of
+them properly and names the others rather than gesturing at them.
+
+| Threat | Layer | Covered here? |
+|---|---|---|
+| The agent goes rogue, or is prompt-injected into buying something | agent-behaviour risk | **No.** Different problem, needs reasoning-trace capture. [x402-secure](https://github.com/t54-labs/x402-secure) does this well and composes with us. |
+| The facilitator fails, or a settlement never lands | payment rail | **No** — but a payment-layer failure is never charged to a provider's reliability, so an outage cannot tank every provider at once. |
+| The seller takes payment and delivers junk | **counterparty risk** | **Yes.** Collateral, published SLA, proof, automatic payout. |
+| The seller lies about freshness | counterparty risk | **Partly.** Detected by cross-provider consistency, scored, never slashed — it is evidence, not proof. |
+| The seller withholds a response entirely | counterparty risk | **No.** No signature, no proof. Specified as v2 below. |
+| **A compromised endpoint swaps the payee** | buyer-side control | **Yes.** See below. |
+| A hostile 402 demands far more than the list price | buyer-side control | **Yes.** Spend controls, enforced client-side. |
+
+### Two buyer-side controls the agent enforces itself
+
+**It refuses to pay anyone but the party whose collateral it checked.**
+An agent that looks up a provider's bond and then pays whatever address the 402
+happens to name is trusting the endpoint, not the registry. A compromised host
+could swap in an attacker's address and collect real money under a bonded
+provider's reputation — and nothing would be claimable afterwards, because the
+bonded provider never signed anything. Before any transaction is constructed,
+the agent checks the advertised `payTo`, asset, network and price against what
+it decided to buy, and aborts if they disagree
+([`assertPaymentAcceptable`](src/lib/recourse-client.ts)).
+
+**It declares a spending limit and an asset allow-list.**
+`setSpendControls` caps any single payment at 5x the advertised price and names
+the only asset it will spend. A 402 asking for a hundred times the list price is
+rejected client-side before a payment payload exists. An unattended buyer should
+never hand a resource server an open cheque.
+
+Both are covered by tests that assert the *refusal*, not just the happy path.
+
+### What this deliberately does not claim
+
+Recourse verifies **objective, published commitments** — that a signed response
+breaches a bound the provider itself put on chain. It does not verify that data
+is *correct*, and it never will without an external reference. "Trust what
+you're paying for" means the seller has money at stake behind its promises, not
+that a contract has checked the world.
+
 ## Known limits
 
 - **Withheld signatures are not slashable.** An on-chain claim covers a response
@@ -635,7 +678,7 @@ npm start                 # http://localhost:3000
 Run the tests:
 
 ```bash
-npm test              # 57 unit tests, no network
+npm test              # 91 unit tests, no network
 npm run test:chain    # adversarial checks against the deployed contract
 ```
 

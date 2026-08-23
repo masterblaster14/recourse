@@ -134,6 +134,29 @@ export function buildPaymentMiddleware() {
   return paymentMiddleware(buildRoutes(), buildResourceServer());
 }
 
+/** One payment option as advertised in a 402 challenge. */
+export type PaymentOptionAdvertised = {
+  scheme: string;
+  network: string;
+  asset: string;
+  amount: string;
+  payTo: string;
+  extra?: Record<string, unknown>;
+};
+
+/** Decodes the base64 JSON in the PAYMENT-REQUIRED header of a 402. */
+export function decodePaymentRequired(
+  value: string | null | undefined,
+): { x402Version: number; accepts: PaymentOptionAdvertised[] } | null {
+  if (!value) return null;
+  try {
+    const parsed = JSON.parse(Buffer.from(value, "base64").toString("utf8"));
+    return Array.isArray(parsed?.accepts) ? parsed : null;
+  } catch {
+    return null;
+  }
+}
+
 /** Decodes the base64 JSON the middleware puts in the PAYMENT-RESPONSE header. */
 export type SettleInfo = {
   success: boolean;

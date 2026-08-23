@@ -214,7 +214,23 @@ export async function runDemo(opts: DemoOptions = {}): Promise<DemoSummary> {
       bucket.calls++;
 
       // ---- 3. pay for it over x402
-      const result = await client.buy(endpoint);
+      // The agent names the payee it checked collateral for. If the 402
+      // advertises anyone else, no payment is built at all.
+      const result = await client.buy(endpoint, {
+        payTo: chosen.provider,
+        assetId: env.assetId,
+        networkCaip2: env.networkCaip2,
+        maxAmountMicro: chosen.price_micro * 5,
+      });
+
+      if (result.refused) {
+        log("error", `call ${i}: REFUSED to pay ${chosen.label} — ${result.error}`);
+        publish({
+          type: "pay", at: now(), runId, index: i,
+          provider: chosen.provider, label: chosen.label,
+          resource: endpoint, amountMicro: 0, txid: null, settled: false,
+        });
+      }
       const settledTx = result.settlement?.transaction ?? null;
       if (result.ok) {
         summary.paid++;

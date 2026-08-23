@@ -15,10 +15,73 @@ import { x402Client, wrapFetchWithPayment, x402HTTPClient } from "@x402/fetch";
 import { toClientAvmSigner } from "@x402/avm";
 import { ExactAvmScheme } from "@x402/avm/exact/client";
 import { env, x402SecretKeyFromMnemonic } from "../env.ts";
+import { decodePaymentRequired } from "../x402.ts";
 import { claimMessage, ed25519Verify, responseHash } from "./signing.ts";
 import { submitClaim } from "./chain.ts";
 import type { ScoreRecord } from "./scoring.ts";
 import type { CheckResult, RouteCandidate } from "./bus.ts";
+
+/**
+ * What the agent insists a 402 must say before it will build a payment.
+ *
+ * The important one is `payTo`. An agent that looks up a provider's collateral
+ * and then pays whatever address the 402 happens to name is trusting the
+ * endpoint, not the registry: a compromised or malicious host could swap in an
+ * attacker's address and collect real money while the bonded provider's
+ * reputation vouches for it — and nothing would be claimable afterwards,
+ * because the bonded provider never signed anything.
+ */
+export type PaymentExpectation = {
+  /** The address whose bond was actually checked. */
+  payTo?: string;
+  assetId?: number;
+  networkCaip2?: string;
+  maxAmountMicro?: number;
+};
+
+export class PaymentRefused extends Error {
+  constructor(readonly detail: string) {
+    super(`refused to pay: ${detail}`);
+    this.name = "PaymentRefused";
+  }
+}
+
+/**
+ * Checks a 402 against what the agent decided to buy. Throws rather than
+ * returning false, so the refusal aborts before a transaction is constructed.
+ */
+export function assertPaymentAcceptable(
+  header: string | null,
+  expect: PaymentExpectation,
+): void {
+  const required = decodePaymentRequired(header);
+  if (!required || required.accepts.length === 0) {
+    throw new PaymentRefused("402 carried no readable payment requirements");
+  }
+
+  // Any advertised option that satisfies every expectation is enough.
+  const reasons: string[] = [];
+  for (const a of required.accepts) {
+    if (expect.payTo && a.payTo !== expect.payTo) {
+      reasons.push(`payee is ${a.payTo.slice(0, 10)}… but the bond checked was ${expect.payTo.slice(0, 10)}…`);
+      continue;
+    }
+    if (expect.assetId !== undefined && a.asset !== String(expect.assetId)) {
+      reasons.push(`asset ${a.asset} is not ${expect.assetId}`);
+      continue;
+    }
+    if (expect.networkCaip2 && a.network !== expect.networkCaip2) {
+      reasons.push(`network ${a.network} is not ${expect.networkCaip2}`);
+      continue;
+    }
+    if (expect.maxAmountMicro !== undefined && Number(a.amount) > expect.maxAmountMicro) {
+      reasons.push(`price ${a.amount} exceeds the cap of ${expect.maxAmountMicro}`);
+      continue;
+    }
+    return; // acceptable
+  }
+  throw new PaymentRefused(reasons[0] ?? "no advertised option was acceptable");
+}
 
 export type SignedResponse = {
   symbol: string;
@@ -58,6 +121,9 @@ export type BuyResult = {
   latencyMs: number;
   /** Whole exchange: the unpaid 402 probe plus the paid request. */
   totalMs: number;
+  /** True when the agent refused to pay at all — the 402 asked for something
+   *  other than what was expected, so no transaction was ever built. */
+  refused: boolean;
   body: SignedResponse | null;
   settlement: { transaction: string; payer?: string; success: boolean } | null;
   /**
@@ -159,13 +225,26 @@ export class RecourseClient {
    * separate them. That is precisely why a latency breach is observed in the
    * score but is never claimable — it is not attributable to the provider.
    */
-  async pay(url: string): Promise<BuyResult> {
+  async pay(url: string, expect: PaymentExpectation = {}): Promise<BuyResult> {
     const started = Date.now();
     const legs: number[] = [];
+    let refused = false;
+
     const timedFetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
       const t0 = Date.now();
       const res = await fetch(input as RequestInfo, init);
       legs.push(Date.now() - t0);
+
+      // Inspect the challenge before a payment is built. Reading a header does
+      // not consume the body, so the wrapper still sees an intact response.
+      if (res.status === 402) {
+        try {
+          assertPaymentAcceptable(res.headers.get("PAYMENT-REQUIRED"), expect);
+        } catch (err) {
+          refused = true;
+          throw err;
+        }
+      }
       return res;
     }) as typeof fetch;
 
@@ -196,7 +275,7 @@ export class RecourseClient {
       }
 
       return {
-        ok: res.ok, status: res.status, latencyMs, totalMs, body, settlement,
+        ok: res.ok, status: res.status, latencyMs, totalMs, body, settlement, refused,
         // A 402 that came back a second time means payment did not take.
         paymentFailed: !res.ok && res.status === 402,
       };
@@ -209,9 +288,11 @@ export class RecourseClient {
         totalMs,
         body: null,
         settlement: null,
+        refused,
         // wrapFetchWithPayment throws only on the payment path: it could not
-        // create a payload, or settlement failed. Never the provider's fault.
-        paymentFailed: true,
+        // create a payload, or settlement failed. A refusal is our own doing,
+        // so it is not a payment-layer failure.
+        paymentFailed: !refused,
         error: String((err as Error)?.message ?? err),
       };
     }
@@ -237,8 +318,8 @@ export class RecourseClient {
     };
   }
 
-  async buy(endpoint: string): Promise<BuyResult> {
-    return this.pay(endpoint);
+  async buy(endpoint: string, expect: PaymentExpectation = {}): Promise<BuyResult> {
+    return this.pay(endpoint, expect);
   }
 
   /**

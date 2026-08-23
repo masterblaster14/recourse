@@ -1,0 +1,25 @@
+name: tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - name: Typecheck
+        run: npm run build
+      - name: Unit tests
+        # No network and no keys: these cover signing, scoring, routing, box
+        # decoding, consistency, payee refusal and canonicalisation interop.
+        # The adversarial on-chain suite (npm run test:chain) needs a funded
+        # TestNet account and is run manually before a demo.
+        run: npm test
