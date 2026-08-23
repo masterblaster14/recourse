@@ -549,11 +549,33 @@ export class RecourseClient {
    * buyer — is not, and no single agent can compute it from its own traffic.
    * That aggregate is the product.
    */
+  /**
+   * Buy the risk record for a provider.
+   *
+   * This is a paid call like any other and gets the same scrutiny. It did not
+   * used to: `score` paid with no expectation at all, so the payee check and
+   * the on-chain settlement confirmation — the two controls this project argues
+   * hardest for — were skipped for the agent's own purchases while being
+   * enforced on everything else.
+   *
+   * That inconsistency was the dangerous shape. Risk data is exactly what an
+   * attacker would want to serve you cheaply from an address of their choosing,
+   * and an agent that verifies the payee for a price feed but not for the
+   * reputation record it uses to *pick* price feeds has secured the wrong half.
+   */
   async score(
     baseUrl: string,
     provider: string,
+    expect: PaymentExpectation = {},
   ): Promise<{ record: ScoreRecord | null; receipt: BuyResult }> {
-    const receipt = await this.pay(`${baseUrl}/score?provider=${provider}`);
+    const receipt = await this.pay(`${baseUrl}/score?provider=${provider}`, {
+      payTo: env.treasuryAddress || undefined,
+      assetId: env.assetId,
+      networkCaip2: env.networkCaip2,
+      maxAmountMicro: env.scorePriceMicro * 5,
+      exactAmountMicro: env.scorePriceMicro,
+      ...expect,
+    });
     return {
       record: receipt.ok ? (receipt.body as unknown as ScoreRecord) : null,
       receipt,

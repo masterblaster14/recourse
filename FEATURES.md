@@ -53,7 +53,7 @@ Algorand Python (`algopy`), compiled to TEAL, deployed to TestNet.
 | | Feature | Notes |
 |:--:|---|---|
 | ✅ | Autonomous purchasing | Own keypair, own limits; no human approves any individual payment |
-| ✅ | Paid market survey | Buys `/score` for every candidate before spending on data |
+| ✅ | Paid market survey | Buys `/score` for every candidate before spending on data — with the same payee check and on-chain settlement confirmation as any other purchase |
 | ✅ | Six-check verification | status, fields, latency, staleness, hash, signature |
 | ✅ | SLA-hash chain of custody | Fetches the published SLA and checks it against the on-chain commitment before trusting the key inside |
 | ✅ | Automatic claim filing | Constructs and submits the on-chain proof itself |
