@@ -17,6 +17,7 @@ import { ecosystem, preflight } from "../lib/bazaar.ts";
 import { proofView } from "../lib/proof.ts";
 import { providerDirectory, publishedSlas, registryStats } from "../lib/service.ts";
 import { EXPLORE_SAMPLES } from "../lib/recourse-client.ts";
+import { CONSISTENCY_TOLERANCE } from "../lib/consistency.ts";
 import { isRunning } from "../agent/runner.ts";
 import { paidPaths } from "../x402.ts";
 
@@ -56,6 +57,9 @@ publicRoutes.get("/providers", async c => {
     app_id: env.appId || null,
     asset: { id: env.assetId, symbol: env.assetSymbol },
     explore_samples: EXPLORE_SAMPLES,
+    // Published so the dashboard cannot state a different threshold than the
+    // one the detector applies. It was hardcoded on both sides and drifted.
+    consistency_tolerance: CONSISTENCY_TOLERANCE,
     providers: list.map(p => ({ ...p, explorer: p.provider ? acctUrl(p.provider) : null })),
   });
 });

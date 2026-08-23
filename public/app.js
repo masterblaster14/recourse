@@ -13,6 +13,9 @@ const state = {
   // Unset until /providers reports it. Guessing a number here meant the
   // page could state a different exploration budget than the agent uses.
   exploreSamples: null,
+  // Served by /providers; never assumed, so the page cannot claim a threshold
+  // the detector does not use.
+  tolerance: null,
   bondBase: {},          // provider -> highest bond seen, for the drain bar
   run: { paid: 0, pass: 0, fail: 0, claims: 0, spent: 0, refund: 0, slash: 0, calls: 0, total: 0 },
   switched: false,
@@ -87,6 +90,7 @@ async function loadProviders() {
   try {
     const d = await j("/providers");
     state.exploreSamples = d.explore_samples ?? null;
+    state.tolerance = d.consistency_tolerance ?? null;
     $("explore-note").textContent = state.exploreSamples === null
       ? ""
       : `explores ${state.exploreSamples} calls before trusting a score`;
@@ -172,7 +176,7 @@ function renderProviders(list) {
 
         ${p.divergence !== null && p.divergence !== undefined ? `
         <div class="metric-row" style="font-size:11px;margin-top:6px">
-          <span>${p.divergence_conclusive && p.divergence > 0.004
+          <span>${p.divergence_conclusive && p.divergence > (state.tolerance ?? Infinity)
             ? "<b>disagrees with the market</b> — cannot be slashed"
             : "agrees with the market"}</span>
           <b>${(p.divergence * 100).toFixed(2)}%</b>

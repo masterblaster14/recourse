@@ -29,10 +29,40 @@
  */
 import type { SampleRow } from "./db.ts";
 
-/** How close in claimed time two observations must be to be comparable. */
+/**
+ * How close in claimed time two observations must be to be comparable.
+ *
+ * Anything wider makes the tolerance harder to set: the further apart two
+ * honest observations are, the more the price can legitimately have moved
+ * between them, so a fixed tolerance must be loose enough to cover the whole
+ * window. 90 seconds is kept because it is what reliably lets three distinct
+ * providers cover the same claimed moment during a run; the tolerance below is
+ * set against how far the price can travel in it.
+ */
 const MATCH_WINDOW_S = 90;
-/** Relative disagreement above which a sample is judged inconsistent. */
-const TOLERANCE = 0.004; // 0.4%
+/**
+ * Relative disagreement above which a sample is judged inconsistent.
+ *
+ * This has to exceed how far two *honest* providers can drift apart inside
+ * MATCH_WINDOW_S, and that is the constraint the first value got wrong. At 0.4%
+ * it was calibrated against a synthetic asset so becalmed it barely moved; once
+ * the price series was given realistic volatility, two honest providers sampled
+ * seconds apart legitimately differed by more than that, and simulation put the
+ * false-positive rate at 58%. A live run duly flagged a compliant provider.
+ *
+ * 1.5% sits above the 99th percentile of honest disagreement within the window
+ * and far below what a 45-minute lag produces (median ~4.4%). Simulated over
+ * the full detector — six samples per provider, median divergence, three
+ * providers per cohort — that is a 1.7% false-positive rate against a 6.4%
+ * false-negative rate.
+ *
+ * The asymmetry is deliberate. A false positive marks an honest provider as a
+ * cheat and costs it traffic on evidence that was never true; a false negative
+ * lets a forger keep serving until the price moves enough to expose it. Given
+ * that this project's entire argument is that accusations should be earned,
+ * missing a liar is the better failure.
+ */
+const TOLERANCE = 0.015; // 1.5%
 /**
  * Distinct providers that must cover a claimed moment before we will judge it.
  *

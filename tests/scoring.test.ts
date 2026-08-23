@@ -180,8 +180,9 @@ describe("a conclusive market divergence is evidence, not silence", () => {
     sigPassRate: 1, p95LatencyMs: 100, upheldClaims: 0, ...over,
   });
 
-  const divergent = { checked: 6, consistent: 0, medianDivergence: 0.0113, conclusive: true };
-  const agreeing = { checked: 6, consistent: 6, medianDivergence: 0.0007, conclusive: true };
+  // ~4.4% is the measured median for a 45-minute lag on this price series.
+  const divergent = { checked: 6, consistent: 0, medianDivergence: 0.044, conclusive: true };
+  const agreeing = { checked: 6, consistent: 6, medianDivergence: 0.0038, conclusive: true };
 
   test("counts a conclusive divergence alongside proven claims", () => {
     assert.equal(decisiveViolations(agg({ consistency: divergent })), 1);
@@ -192,7 +193,7 @@ describe("a conclusive market divergence is evidence, not silence", () => {
   });
 
   test("an inconclusive divergence stays silent — too little evidence to act", () => {
-    const early = { checked: 2, consistent: 0, medianDivergence: 0.02, conclusive: false };
+    const early = { checked: 2, consistent: 0, medianDivergence: 0.05, conclusive: false };
     assert.equal(decisiveViolations(agg({ consistency: early })), 0);
   });
 
