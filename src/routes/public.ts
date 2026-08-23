@@ -18,6 +18,7 @@ import { proofView } from "../lib/proof.ts";
 import { providerDirectory, publishedSlas, registryStats } from "../lib/service.ts";
 import { EXPLORE_SAMPLES } from "../lib/recourse-client.ts";
 import { isRunning } from "../agent/runner.ts";
+import { paidPaths } from "../x402.ts";
 
 export const publicRoutes = new Hono();
 
@@ -38,7 +39,10 @@ publicRoutes.get("/health", async c => {
     agent: env.agentAddress || null,
     repo: env.repoUrl || null,
     demo_running: isRunning(),
-    paid_endpoints: ["GET /score", "GET /feed/compliant", "GET /feed/stale"],
+    // Generated from the route table, never hand-listed. This was stale at
+    // three entries while five routes were behind the paywall — the same
+    // failure /x402 had, and the same fix.
+    paid_endpoints: [...paidPaths()].sort().map(path => `GET ${path}`),
     price: {
       score: fromMicro(env.scorePriceMicro),
       feed: fromMicro(env.priceMicro),

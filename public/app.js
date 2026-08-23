@@ -58,10 +58,15 @@ async function loadHealth() {
       a.href = `${EXPLORER}/application/${h.app_id}`;
     }
 
-    $("endpoints").innerHTML = `
-      <div class="k">GET /score</div><div class="v">${fmt(h.price.score)} ${h.asset.symbol}</div>
-      <div class="k">GET /feed/compliant</div><div class="v">${fmt(h.price.feed)} ${h.asset.symbol}</div>
-      <div class="k">GET /feed/stale</div><div class="v">${fmt(h.price.feed)} ${h.asset.symbol}</div>
+    // Rendered from what the server reports, not a copy of it kept in sync by
+    // hand — the hardcoded version listed three of the five paid routes.
+    const paid = (h.paid_endpoints ?? [])
+      .map(e => {
+        const price = e.includes("/score") ? h.price.score : h.price.feed;
+        return `<div class="k">${e}</div><div class="v">${fmt(price)} ${h.asset.symbol}</div>`;
+      })
+      .join("");
+    $("endpoints").innerHTML = `${paid}
       <div class="k">Facilitator</div><div class="v">GoPlausible</div>
       <div class="k">Store</div><div class="v">${h.store}</div>`;
 
@@ -96,6 +101,34 @@ function renderProviders(list) {
     // The headline number must be the thing it is labelled: passes over samples.
     // p.reliability is the weighted composite and is a different quantity — it
     // lives in /score for agents, not on a card next to the word "pass rate".
+    // A provider we have never bought from gets facts and nothing else. A
+    // registry listing is not evidence about anybody's uptime, and inventing a
+    // bar for it would be the exact dishonesty the ecosystem view avoids.
+    if (p.independent) {
+      return `
+      <div class="pcard independent">
+        <div class="pcard-top">
+          <div style="min-width:0">
+            <h3>${p.label}</h3>
+            <div class="addr"><a href="${EXPLORER}/account/${p.provider}" target="_blank" rel="noopener">${short(p.provider, 8)}</a></div>
+          </div>
+          <span class="badge unrated">not ours</span>
+        </div>
+        <div class="blurb">${p.blurb}</div>
+        <div class="metric-row"><span>Bond</span><b>${fmt(p.bond)} ${state.asset}</b></div>
+        <div class="track"><i class="good" style="width:100%"></i></div>
+        <div class="metric-row"><span>Its price</span><b>${fmt(p.price, 4)} ${state.asset}</b></div>
+        <div class="metric-row" style="font-size:11px;margin-top:6px">
+          <span>never bought from — no reliability claimed</span><b>—</b>
+        </div>
+        <div class="pstats">
+          <div class="pstat"><div class="n">0</div><div class="l">samples</div></div>
+          <div class="pstat"><div class="n" style="color:${p.claims ? "var(--bad)" : "inherit"}">${p.claims}</div><div class="l">claims</div></div>
+          <div class="pstat"><div class="n">${p.active ? "live" : "off"}</div><div class="l">status</div></div>
+        </div>
+      </div>`;
+    }
+
     const passRate = p.samples ? Math.round((p.passes / p.samples) * 100) : 0;
     const low = Math.round((p.reliability_lower_bound ?? 0) * 100);
     // The bar shows the lower bound, because that is the number the agent acts

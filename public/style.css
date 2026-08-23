@@ -542,3 +542,8 @@ footer a { color: var(--lime); }
   .flow .step { grid-template-columns: 26px 1fr; }
   .flow .step .v { grid-column: 2; text-align: left; max-width: none; margin-top: 4px; }
 }
+
+/* A provider somebody else registered. Visually distinct so nobody mistakes it
+   for one of the demo endpoints, but not diminished — it is the only card on
+   the page that proves the registry is open to anyone. */
+.pcard.independent { border-style: dashed; background: var(--grey-warm); }

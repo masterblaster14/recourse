@@ -3,8 +3,8 @@
  * directory, and the agent's own routing loop. One place that joins on-chain
  * truth (bond, SLA, claim counters) with off-chain observation (samples).
  */
-import { env } from "../env.ts";
-import { readProvider, readGlobalState, type ProviderState } from "./chain.ts";
+import { env, fromMicro } from "../env.ts";
+import { listRegisteredProviders, readProvider, readGlobalState, type ProviderState } from "./chain.ts";
 import { store } from "./db.ts";
 import { computeConsistency } from "./consistency.ts";
 import { buildScoreRecord, type ScoreRecord } from "./scoring.ts";
@@ -97,6 +97,15 @@ export type ProviderSummary = {
   distinct_payers: number;
   /** True while every observation traces back to one payer. Caps confidence. */
   single_source: boolean;
+  /**
+   * Registered by somebody other than us.
+   *
+   * The registry is permissionless, so the set of bonded providers is not ours
+   * to curate. Listing only the four we happen to run would make the dashboard
+   * disagree with the chain it claims to read — and would quietly hide the one
+   * piece of evidence that anybody can join.
+   */
+  independent: boolean;
 };
 
 export async function providerDirectory(): Promise<ProviderSummary[]> {
@@ -109,6 +118,7 @@ export async function providerDirectory(): Promise<ProviderSummary[]> {
       blurb: p.blurb,
       endpoint: p.endpoint,
       variant: p.variant,
+      independent: false,
       price: s?.price ?? env.priceMicro / 10 ** env.assetDecimals,
       bond: s?.bond ?? 0,
       bond_micro: s?.bond_micro ?? 0,
@@ -127,6 +137,51 @@ export async function providerDirectory(): Promise<ProviderSummary[]> {
       single_source: s?.counterparties.single_source ?? true,
     });
   }
+
+  // Anyone else who has registered themselves. `register` and `deposit_bond`
+  // key off Txn.sender, so this set is not ours to curate — and a dashboard
+  // that showed four while the registry it reads reports five would be
+  // reporting our demo rather than the chain.
+  //
+  // Facts only. We have never bought from these endpoints, so we have no
+  // reliability to report and do not invent one: a registry listing is not
+  // evidence about anybody's uptime. Same rule the ecosystem view follows.
+  if (env.appId) {
+    const known = new Set(out.map(p => p.provider));
+    for (const address of await listRegisteredProviders(env.appId).catch(() => [])) {
+      if (known.has(address)) continue;
+      const onchain = await readProvider(env.appId, address).catch(() => null);
+      if (!onchain) continue;
+      out.push({
+        provider: address,
+        label: `Independent · ${address.slice(0, 6)}…`,
+        blurb:
+          "Registered itself with its own terms and staked its own collateral. " +
+          "Nobody approved it, and we have never bought from it — so there is no " +
+          "reliability score here, only what the chain says.",
+        endpoint: "",
+        variant: "compliant",
+        independent: true,
+        price: fromMicro(onchain.priceMicro),
+        bond: fromMicro(onchain.bondMicro),
+        bond_micro: onchain.bondMicro,
+        active: onchain.active,
+        registered: true,
+        reliability: 0,
+        reliability_lower_bound: 0,
+        recommendation: "unrated",
+        confidence: "low",
+        samples: 0,
+        passes: 0,
+        claims: onchain.claimCount,
+        divergence: null,
+        divergence_conclusive: false,
+        distinct_payers: 0,
+        single_source: true,
+      });
+    }
+  }
+
   return out;
 }
 
